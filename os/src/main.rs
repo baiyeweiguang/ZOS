@@ -1,15 +1,25 @@
-#![no_main]
 #![no_std]
-mod lang_items;
+#![no_main]
+#![feature(panic_info_message)]
 
 use core::arch::global_asm;
+
+// macro_use用来将console的宏导出来 下面的lang_items也能用print和println
+#[macro_use]
+mod console;
+mod lang_items;
+mod sbi;
+
 global_asm!(include_str!("entry.asm"));
 
 // 默认情况 rust编译器会对每个函数进行名称修饰(name mangling) 保证每个函数都有唯一的名字 以支持重载等特性
 // 使用#[no_mangle]属性修饰 可以保证rust_main在汇编语言中的标签就是rust_main
 #[no_mangle]
 pub fn rust_main() -> ! {
-    loop {}
+  clear_bss();
+  println!("Hello wolrd");
+  // panic!("Test panic");
+  loop {}
 }
 
 fn clear_bss() {
@@ -22,6 +32,6 @@ fn clear_bss() {
   // usize: The pinter-sized integer type (docs.rust-lang.org)
   (sbss as usize..ebss as usize).for_each(|a| {
     // *: rust的裸指针 相当于C指针
-    unsafe {(a as *mut u8).write_volatiole(0) }
+    unsafe {(a as *mut u8).write_volatile(0) }
   })
 }
