@@ -9,10 +9,10 @@ fn panic(info: &PanicInfo) -> ! {
       "Picked at {}: {} {}",
       location.file(), 
       location.line(),
-      info.message().unwrap()
+      info.message()
     );
   } else {
-    println!("Panicked: {}", info.message().unwrap())
+    println!("Panicked: {}", info.message())
   }
-  shutdown();
+  shutdown(true);
 }
