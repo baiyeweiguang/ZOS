@@ -1,19 +1,21 @@
-use crate::sbi::console_putchar;
+// user模式下的stdout
+
 use core::fmt::{self, Write};
+use super::write;
 
 struct Stdout;
 
+const STDOUT_FD: usize = 1;
+
 impl Write for Stdout {
   fn write_str(&mut self, s: &str) -> fmt::Result {
-    for c in s.chars() {
-      console_putchar(c as usize);
-    }
+    // as_bytes(): 将字符串转换为[u8]
+    write(STDOUT_FD, s.as_bytes());
     Ok(())
   }
 }
 
 pub fn print(args: fmt::Arguments) {
-  // write_fmt已经由Write trait实现了
   Stdout.write_fmt(args).unwrap();
 }
 
