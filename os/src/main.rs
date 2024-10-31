@@ -10,6 +10,8 @@ mod batch;
 mod console;
 mod lang_items;
 mod sbi;
+mod syscall;
+mod trap;
 
 global_asm!(include_str!("entry.asm"));
 // global_asm!(include_str!("link_app.S"));
@@ -18,22 +20,22 @@ global_asm!(include_str!("entry.asm"));
 // 使用#[no_mangle]属性修饰 可以保证rust_main在汇编语言中的标签就是rust_main
 #[no_mangle]
 pub fn rust_main() -> ! {
-  clear_bss();
-  println!("Hello wolrd");
-  // panic!("Test panic");
-  loop {}
+    clear_bss();
+    println!("Hello wolrd");
+    // panic!("Test panic");
+    loop {}
 }
 
 fn clear_bss() {
-  extern "C" {
-    // 这些函数的ABI与C语言兼容
-    fn sbss();
-    fn ebss();
-  }
-  // sbss as uszie可以获得sbss函数的地址
-  // usize: The pinter-sized integer type (docs.rust-lang.org)
-  (sbss as usize..ebss as usize).for_each(|a| {
-    // *: rust的裸指针 相当于C指针
-    unsafe {(a as *mut u8).write_volatile(0) }
-  })
+    extern "C" {
+        // 这些函数的ABI与C语言兼容
+        fn sbss();
+        fn ebss();
+    }
+    // sbss as uszie可以获得sbss函数的地址
+    // usize: The pinter-sized integer type (docs.rust-lang.org)
+    (sbss as usize..ebss as usize).for_each(|a| {
+        // *: rust的裸指针 相当于C指针
+        unsafe { (a as *mut u8).write_volatile(0) }
+    })
 }
