@@ -1,10 +1,12 @@
 mod context;
-use crate::syscall::syscall;
+pub use context::TrapContext;
+
 use crate::batch::run_next_app;
-use context::TrapContext;
-use core::f32::consts::E;
+use crate::syscall::syscall;
+use core::{arch::global_asm};
 use riscv::register::{
-    scause::{self, Exception::*, Interrupt, Trap},
+    mtvec::TrapMode,
+    scause::{self, Exception, Trap},
     stval, stvec,
 };
 
@@ -25,35 +27,27 @@ pub fn init() {
 
 #[no_mangle]
 pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
-    let scause = scause::read();
-    let stval = stval::read();
+    let scause = scause::read(); // get trap cause
+    let stval = stval::read(); // get extra value
     match scause.cause() {
-        Exception(ex) => {
-            match ex {
-                UserEnvCall => {
-                    // spec: 当trap为异常时，sepc指向引起异常的指令
-                    cx.sepc += 4;
-                    cx.x[10] = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize;
-                }
-                StoreFault | StorePageFault => {
-                  println!("[kernel] PageFault in application, kernel killed it.");
-                  run_next_app();
-                }
-                IllegalInstruction => {
-                    println!("[kernel] IllegalInstruction in application, kernel killed it.");
-                    run_next_app();
-                }
-                _ => {
-                    panic!("Unhandled exception: {:?}\n", ex);
-                }
-            }
+        Trap::Exception(Exception::UserEnvCall) => {
+            cx.sepc += 4;
+            cx.x[10] = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize;
         }
-        Interrupt(int) => {
-            match int {
-                _ => {
-                    panic!("Unhandled interrupt: {:?}\n", int);
-                }
-            }
+        Trap::Exception(Exception::StoreFault) | Trap::Exception(Exception::StorePageFault) => {
+            println!("[kernel] PageFault in application, kernel killed it.");
+            run_next_app();
+        }
+        Trap::Exception(Exception::IllegalInstruction) => {
+            println!("[kernel] IllegalInstruction in application, kernel killed it.");
+            run_next_app();
+        }
+        _ => {
+            panic!(
+                "Unsupported trap {:?}, stval = {:#x}!",
+                scause.cause(),
+                stval
+            );
         }
     }
     cx

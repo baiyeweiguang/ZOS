@@ -1,8 +1,9 @@
 use crate::println;
 use crate::sbi::shutdown;
 use crate::sync::UPSafeCell;
-use lazy_static::*;
+use crate::trap::TrapContext;
 use core::arch::asm;
+use lazy_static::*;
 
 const MAX_APP_NUM: usize = 10;
 const APP_BASE_ADDRESS: usize = 0x8040000;
@@ -10,7 +11,7 @@ const APP_SIZE_LIMIT: usize = 0x20000;
 
 struct AppManager {
     num_app: usize,
-    current_app: usize,
+    current_app: usize, // id
     app_start: [usize; MAX_APP_NUM + 1],
 }
 
@@ -119,7 +120,24 @@ pub fn print_app_info() {
     APP_MANAGER.exclusive_access().print_app_info();
 }
 
-pub fn run_next_app() {}
+pub fn run_next_app() -> ! {
+    let mut app_manager = APP_MANAGER.exclusive_access();
+    let current_app = app_manager.get_current_app();
+
+    app_manager.load_app(current_app);
+
+    app_manager.move_to_next_app();
+    drop(app_manager);
+
+    extern "C" {
+        fn __restore(ctx_addr: usize) -> !;
+    }
+
+    unsafe {
+        let ctx = TrapContext::app_init_context(APP_BASE_ADDRESS, USER_STACK.get_sp());
+        __restore(KERNEL_STACK.push_context(ctx) as *const _ as usize);
+    }
+}
 
 // 用户栈和内核栈
 
@@ -134,6 +152,15 @@ struct KernelStack {
 impl KernelStack {
     fn get_sp(&self) -> usize {
         self.data.as_ptr() as usize + KERNEL_STACK_SIZE
+    }
+
+    pub fn push_context(&self, cx: TrapContext) -> &'static mut TrapContext {
+        // 为什么这里移动栈后不修改sp??当前的get_sp()返回的是定值，有点抽象，虽然不影响结果
+        let cx_ptr = (self.get_sp() - core::mem::size_of::<TrapContext>()) as *mut TrapContext;
+        unsafe {
+            *cx_ptr = cx;
+        }
+        unsafe { cx_ptr.as_mut().unwrap() }
     }
 }
 
