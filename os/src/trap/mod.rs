@@ -1,6 +1,7 @@
 mod context;
 pub use context::TrapContext;
 
+use crate::println;
 use crate::batch::run_next_app;
 use crate::syscall::syscall;
 use core::{arch::global_asm};
