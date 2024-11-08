@@ -50,3 +50,5 @@ pub fn write(fd: usize, buffer: &[u8]) -> isize {
 pub fn exit(code: i32) -> isize {
     sys_exit(code)
 }
+
+// pub fn yield()

@@ -20,7 +20,8 @@ impl TrapContext {
     }
 
     // 开辟一个栈空间（TrapContext），设置了sstatus、sepc和sp三个寄存器，其他寄存器都初始化为0
-    pub fn app_init_context(entry: usize, sp: usize) -> Self {
+    // 用于初始化TrapContext，构造一个用户态的默认上下文
+    pub fn new_setted_app_entry(entry: usize, sp: usize) -> Self {
         let mut sstatus = sstatus::read();
         sstatus.set_spp(SPP::User);
 

@@ -6,13 +6,19 @@ use core::arch::global_asm;
 // macro_use用来将console的宏导出来 下面的lang_items也能用print和println
 #[macro_use]
 mod sync;
-mod batch;
+mod config;
 mod console;
 mod lang_items;
+mod loader;
+mod logging;
 mod sbi;
 mod syscall;
+mod task;
 mod trap;
-mod logging;
+mod timer;
+
+#[path = "boards/qemu.rs"]
+mod board;
 
 global_asm!(include_str!("entry.asm"));
 // global_asm!(include_str!("link_app.S"));
@@ -24,8 +30,11 @@ pub fn rust_main() -> ! {
     clear_bss();
     println!("Hello wolrd");
     trap::init();
-    batch::init();
-    batch::run_next_app();
+    loader::load_apps();
+    trap::enable_timer_interrupt();
+    timer::set_next_trigger();
+    task::run_first_task();
+    panic!("Unreachable in rust_main");
 }
 
 fn clear_bss() {

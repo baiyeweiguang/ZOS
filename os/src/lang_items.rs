@@ -1,6 +1,6 @@
+use crate::println;
 use crate::sbi::shutdown;
 use core::panic::PanicInfo;
-use crate::println;
 
 #[panic_handler]
 // ! 做为返回类型时，被称为never类型，表示函数永远不会返回。
