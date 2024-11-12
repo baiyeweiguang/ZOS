@@ -9,7 +9,9 @@ use crate::println;
 use crate::syscall::syscall;
 use core::arch::global_asm;
 use riscv::register::{
-     mtvec::TrapMode, scause::{self, Exception, Trap, Interrupt}, stval, stvec
+    mtvec::TrapMode,
+    scause::{self, Exception, Interrupt, Trap},
+    stval, stvec,
 };
 
 global_asm!(include_str!("trap.S"));

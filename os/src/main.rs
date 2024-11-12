@@ -14,14 +14,14 @@ mod logging;
 mod sbi;
 mod syscall;
 mod task;
-mod trap;
 mod timer;
+mod trap;
 
 #[path = "boards/qemu.rs"]
 mod board;
 
 global_asm!(include_str!("entry.asm"));
-// global_asm!(include_str!("link_app.S"));
+global_asm!(include_str!("link_app.S"));
 
 // 默认情况 rust编译器会对每个函数进行名称修饰(name mangling) 保证每个函数都有唯一的名字 以支持重载等特性
 // 使用#[no_mangle]属性修饰 可以保证rust_main在汇编语言中的标签就是rust_main

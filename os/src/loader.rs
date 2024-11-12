@@ -101,6 +101,7 @@ pub fn load_apps() {
 /// return the sp of `TrapContext` in kernel stack
 /// 对应原版的init_app_cx
 pub fn init_app_cx(app_id: usize) -> usize {
-    let trap_cx = TrapContext::new_setted_app_entry(get_base_i(app_id), USER_STACK[app_id].get_sp());
+    let trap_cx =
+        TrapContext::new_setted_app_entry(get_base_i(app_id), USER_STACK[app_id].get_sp());
     KERNEL_STACK[app_id].push_context(trap_cx)
 }

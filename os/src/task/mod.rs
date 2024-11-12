@@ -2,7 +2,6 @@ mod context;
 mod switch;
 mod task;
 
-use core::borrow::BorrowMut;
 use core::panic;
 
 pub use context::TaskContext;
@@ -45,7 +44,7 @@ lazy_static! {
   /// Global variable: TASK_MANAGER
   pub static ref TASK_MANAGER: TaskManager = {
       let num_app = get_num_app();
-      
+
       let mut tasks = [TaskControlBlock {
           task_cx: TaskContext::new_empty(),
           task_status: TaskStatus::UnInit,
@@ -58,12 +57,12 @@ lazy_static! {
 
       TaskManager {
           num_app,
-          inner: unsafe {
+          inner: 
               UPSafeCell::new(TaskManagerInner {
                   tasks,
                   current_task: 0,
               })
-          },
+          ,
       }
   };
 }
@@ -73,12 +72,14 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
         inner.tasks[current].task_status = TaskStatus::Ready;
+        // println!("[debug kernel current task {} ready]", current);
     }
 
     pub fn mark_current_exited(&self) {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
         inner.tasks[current].task_status = TaskStatus::Exited;
+        // println!("[debug kernel current task {} exited]", current);
     }
 
     fn run_next_task(&self) {
@@ -88,7 +89,6 @@ impl TaskManager {
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &mut inner.tasks[next].task_cx as *mut TaskContext;
 
-            inner.tasks[current].task_status = TaskStatus::Ready;
             inner.tasks[next].task_status = TaskStatus::Running;
             inner.current_task = next;
             drop(inner);
@@ -121,9 +121,10 @@ impl TaskManager {
         let inner = self.inner.exclusive_access();
         let current = inner.current_task;
 
-        for i in 1..self.num_app {
+        for i in 1..self.num_app + 1 {
             let next = (current + i) % self.num_app;
             if inner.tasks[next].task_status == TaskStatus::Ready {
+                println!("[kernel] current: {}, next: {}, num_app: {}", current, next, self.num_app);
                 return Some(next);
             }
         }
@@ -133,13 +134,13 @@ impl TaskManager {
 }
 
 pub fn exit_current_and_run_next() {
-  TASK_MANAGER.mark_current_exited();
-  TASK_MANAGER.run_next_task();
+    TASK_MANAGER.mark_current_exited();
+    TASK_MANAGER.run_next_task();
 }
 
 pub fn suspend_current_and_run_next() {
-  TASK_MANAGER.mark_current_suspend();
-  TASK_MANAGER.run_next_task();
+    TASK_MANAGER.mark_current_suspend();
+    TASK_MANAGER.run_next_task();
 }
 
 pub fn run_first_task() {

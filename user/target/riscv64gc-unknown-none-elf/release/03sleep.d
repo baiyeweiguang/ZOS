@@ -1,0 +1,1 @@
+/root/ZOS/user/target/riscv64gc-unknown-none-elf/release/03sleep: /root/ZOS/user/src/bin/03sleep.rs /root/ZOS/user/src/console.rs /root/ZOS/user/src/lang_items.rs /root/ZOS/user/src/lib.rs /root/ZOS/user/src/syscall.rs
