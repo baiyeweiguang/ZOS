@@ -1,7 +1,11 @@
 #![no_std]
 #![no_main]
+#![feature(alloc_error_handler)]
 
+extern crate alloc;
 use core::arch::global_asm;
+
+use buddy_system_allocator::Heap;
 
 // macro_use用来将console的宏导出来 下面的lang_items也能用print和println
 #[macro_use]
@@ -11,6 +15,7 @@ mod console;
 mod lang_items;
 mod loader;
 mod logging;
+mod mm;
 mod sbi;
 mod syscall;
 mod task;
@@ -30,6 +35,7 @@ pub fn rust_main() -> ! {
     clear_bss();
     println!("Hello wolrd");
     trap::init();
+    mm::init();
     loader::load_apps();
     trap::enable_timer_interrupt();
     timer::set_next_trigger();
