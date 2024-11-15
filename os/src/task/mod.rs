@@ -57,7 +57,7 @@ lazy_static! {
 
       TaskManager {
           num_app,
-          inner: 
+          inner:
               UPSafeCell::new(TaskManagerInner {
                   tasks,
                   current_task: 0,
@@ -124,7 +124,10 @@ impl TaskManager {
         for i in 1..self.num_app + 1 {
             let next = (current + i) % self.num_app;
             if inner.tasks[next].task_status == TaskStatus::Ready {
-                println!("[kernel] current: {}, next: {}, num_app: {}", current, next, self.num_app);
+                println!(
+                    "[kernel] current: {}, next: {}, num_app: {}",
+                    current, next, self.num_app
+                );
                 return Some(next);
             }
         }
