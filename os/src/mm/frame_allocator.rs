@@ -40,7 +40,7 @@ impl FrameAllocator for StackFrameAllocator {
     fn dealloc(&mut self, ppn: PhysPageNum) {
         let ppn = ppn.0;
         // if ppn >= self.current || self.recycled.iter().find(|&x| *x == ppn).is_some() {
-            // panic!("dealloc frame out of range");
+        // panic!("dealloc frame out of range");
         // }
         if ppn >= self.current || self.recycled.contains(&ppn) {
             panic!("dealloc frame out of range, PPN: {}", ppn);
@@ -57,11 +57,21 @@ impl StackFrameAllocator {
     }
 }
 
-use crate::sync::UPSafeCell;
+use crate::{mm::address::PhysAddr, sync::UPSafeCell};
 use lazy_static::lazy_static;
 type FrameAllocatorImpl = StackFrameAllocator;
 lazy_static! {
-    pub static ref FRAME_ALLOCATOR: UPSafeCell<FrameAllocatorImpl> = unsafe {
-        UPSafeCell::new(FrameAllocatorImpl::new())
-    };
+    pub static ref FRAME_ALLOCATOR: UPSafeCell<FrameAllocatorImpl> =
+        unsafe { UPSafeCell::new(FrameAllocatorImpl::new()) };
+}
+
+pub fn init_frame_allocator() {
+    extern "C" {
+        fn ekernel();
+    }
+    // 头需要上取整，尾需要下取整，细节
+    FRAME_ALLOCATOR.exclusive_access().init(
+        PhysAddr::from(ekernel as usize).ceil(),
+        PhysAddr::from(crate::config::MEMORY_END).floor(),
+    );
 }
