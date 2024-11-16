@@ -1,4 +1,8 @@
+use core::fmt::{Debug, Formatter};
+
 use crate::config::{PAGE_SIZE, PAGE_SIZE_BITS};
+
+use super::page_table::PageTableEntry;
 
 // PA: Physical Address
 pub const PA_WIDTH_SV39: usize = 56;
@@ -8,11 +12,14 @@ pub const PPN_WIDTH_SV39: usize = PA_WIDTH_SV39 - PAGE_SIZE_BITS;
 pub const VPN_WIDTH_SV39: usize = VA_WIDTH_SV39 - PAGE_SIZE_BITS;
 
 /// Definitions
-/// [55:12] 为物理页框号 [11:0] 为页内偏移
+/// physical address
+/// [63:56] = 0 [55:12] 为物理页框号 [11:0] 为页内偏移
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct PhysAddr(pub usize);
 
-/// virtual address
+/// [64:39] = 0
+/// [38:12] 为虚拟页号 [11:0] 为页内偏移
+/// 相当于VirtPageNum + PageOffset
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct VirtAddr(pub usize);
 
@@ -21,6 +28,7 @@ pub struct VirtAddr(pub usize);
 pub struct PhysPageNum(pub usize);
 
 /// virtual page number
+// [26:17] 为一级页表索引 [16:9] 为二级页表索引 [8:0] 为三级页表索引
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct VirtPageNum(pub usize);
 
@@ -42,6 +50,40 @@ impl PhysAddr {
 
     pub fn ceil(&self) -> PhysPageNum {
         PhysPageNum((self.0 + PAGE_SIZE - 1) / PAGE_SIZE)
+    }
+}
+
+impl PhysPageNum {
+    pub fn get_pte_array(&self) -> &'static mut [PageTableEntry] {
+        let pa: PhysAddr = self.clone().into();
+        unsafe { core::slice::from_raw_parts_mut(pa.0 as *mut PageTableEntry, 512) }
+    }
+
+    // As a reference lifetime, &'static ndicates the data
+    // pointed to by the reference lives as long as the running program.
+    // But it can still be coerced to a shorter lifetime.
+    pub fn get_bytes_array(&self) -> &'static mut [u8] {
+        let pa: PhysAddr = (*self).into();
+        unsafe { core::slice::from_raw_parts_mut(pa.0 as *mut u8, PAGE_SIZE) }
+    }
+
+    pub fn get_mut<T>(&self) -> &'static mut T {
+        let pa: PhysAddr = self.clone().into();
+        unsafe { (pa.0 as *mut T).as_mut().unwrap() }
+    }
+}
+
+impl VirtPageNum {
+    // 获取这个虚拟页表的三级页表的索引
+    pub fn indexes(&self) -> [usize; 3] {
+        let mut vpn = self.0;
+        let mut idx: [usize; 3] = [0; 3];
+        for i in (0..3).rev() {
+            // 取低9位
+            idx[i] = vpn & 0b111111111; // 9 bits
+            vpn >>= 9;
+        }
+        idx
     }
 }
 
@@ -92,5 +134,17 @@ impl From<usize> for VirtAddr {
 impl From<usize> for VirtPageNum {
     fn from(v: usize) -> Self {
         Self(v & ((1 << VPN_WIDTH_SV39) - 1))
+    }
+}
+
+impl Debug for PhysPageNum {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.write_fmt(format_args!("PhysPageNum({:#x})", self.0))
+    }
+}
+
+impl Debug for VirtPageNum {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.write_fmt(format_args!("VirtPageNum({:#x})", self.0))
     }
 }

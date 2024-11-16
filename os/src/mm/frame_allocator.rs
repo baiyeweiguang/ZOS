@@ -1,7 +1,8 @@
-use alloc::vec::Vec;
-
 use super::address::PhysPageNum;
+use alloc::vec::Vec;
+use core::fmt::{Debug, Formatter};
 
+// 从ekernel到MEMORY_END的内存可以分配出去
 trait FrameAllocator {
     fn new() -> Self;
     fn alloc(&mut self) -> Option<PhysPageNum>;
@@ -57,7 +58,7 @@ impl StackFrameAllocator {
     }
 }
 
-use crate::{mm::address::PhysAddr, sync::UPSafeCell};
+use crate::{mm::address::PhysAddr, println, sync::UPSafeCell};
 use lazy_static::lazy_static;
 type FrameAllocatorImpl = StackFrameAllocator;
 lazy_static! {
@@ -74,4 +75,58 @@ pub fn init_frame_allocator() {
         PhysAddr::from(ekernel as usize).ceil(),
         PhysAddr::from(crate::config::MEMORY_END).floor(),
     );
+}
+
+pub struct FrameTracker {
+    pub ppn: PhysPageNum,
+}
+
+impl FrameTracker {
+    pub fn new(ppn: PhysPageNum) -> Self {
+        ppn.get_bytes_array().iter_mut().for_each(|x| *x = 0);
+        FrameTracker { ppn }
+    }
+}
+
+impl Drop for FrameTracker {
+    fn drop(&mut self) {
+        frame_dealloc(self.ppn);
+    }
+}
+
+/// allocate a frame
+pub fn frame_alloc() -> Option<FrameTracker> {
+    FRAME_ALLOCATOR
+        .exclusive_access()
+        .alloc()
+        .map(FrameTracker::new)
+}
+
+/// deallocate a frame
+fn frame_dealloc(ppn: PhysPageNum) {
+    FRAME_ALLOCATOR.exclusive_access().dealloc(ppn);
+}
+
+impl Debug for FrameTracker {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.write_fmt(format_args!("FrameTracker({:#x})", self.ppn.0))
+    }
+}
+
+#[allow(unused)]
+pub fn frame_allocator_test() {
+    let mut v: Vec<FrameTracker> = Vec::new();
+    for i in 0..5 {
+        let frame = frame_alloc().unwrap();
+        println!("{:?}", frame);
+        v.push(frame);
+    }
+    v.clear();
+    for i in 0..5 {
+        let frame = frame_alloc().unwrap();
+        println!("{:?}", frame);
+        v.push(frame);
+    }
+    drop(v);
+    println!("frame_allocator_test passed!");
 }

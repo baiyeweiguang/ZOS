@@ -1,7 +1,13 @@
+use alloc::vec;
+use alloc::vec::Vec;
+
 use bitflags::*;
 
 use super::address::PhysPageNum;
+use super::address::VirtPageNum;
 use super::address::PPN_WIDTH_SV39;
+use super::frame_allocator::frame_alloc;
+use super::frame_allocator::FrameTracker;
 
 bitflags! {
     pub struct PTEFlags: u8 {
@@ -34,6 +40,7 @@ impl PageTableEntry {
         Self { bits: 0 }
     }
 
+    // 从一个页表项中获取物理页号
     pub fn ppn(&self) -> PhysPageNum {
         // (1usize << PPN_WIDTH_SV39) - 1 : 取低 PPN_WIDTH_SV39 位
         ((self.bits >> 10) & ((1usize << PPN_WIDTH_SV39) - 1)).into()
@@ -54,5 +61,93 @@ impl PageTableEntry {
 
     pub fn is_accessed(&self) -> bool {
         (self.flags() & PTEFlags::A) != PTEFlags::empty()
+    }
+}
+
+pub struct PageTable {
+    // 对应原版的root_ppn
+    root_table_ppn: PhysPageNum,
+    frames: Vec<FrameTracker>,
+}
+
+impl PageTable {
+    pub fn new() -> Self {
+        let frame = frame_alloc().unwrap();
+        PageTable {
+            root_table_ppn: frame.ppn,
+            frames: vec![frame],
+        }
+    }
+
+    // 插入一个虚拟页号到物理页号的映射（即创建/修改一个页表项）
+    pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) {
+        let pte = self.find_pte_create(vpn).unwrap();
+        assert!(!pte.is_valid(), "vpn {:?} is mapped before mapping", vpn);
+        *pte = PageTableEntry::new(ppn, flags | PTEFlags::V);
+    }
+
+    // 删除一个虚拟页号的映射
+    pub fn unmap(&mut self, vpn: VirtPageNum) {
+        let pte = self.find_pte(vpn).unwrap();
+        assert!(
+            pte.is_valid(),
+            "vpn {:?} is not mapped before unmapping",
+            vpn
+        );
+        *pte = PageTableEntry::new_empty();
+    }
+
+    pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
+        self.find_pte(vpn).map(|pte| pte.clone())
+    }
+
+    /// Temporarily used to get arguments from user space.
+    pub fn from_token(satp: usize) -> Self {
+        Self {
+            root_table_ppn: PhysPageNum::from(satp & ((1usize << 44) - 1)),
+            frames: Vec::new(),
+        }
+    }
+
+    // 获取一个虚拟页号对应的物理页号，如果不存在会自动创建
+    fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
+        let idx = vpn.indexes();
+
+        let mut table_ppn = self.root_table_ppn;
+        for i in 0..3 {
+            let pte = &mut table_ppn.get_pte_array()[idx[i]];
+            if i == 2 {
+                return Some(pte);
+            }
+            if !pte.is_valid() {
+                // 为当前的页表，分配一个新的物理页
+                let frame = frame_alloc().unwrap();
+                *pte = PageTableEntry::new(frame.ppn, PTEFlags::V);
+                self.frames.push(frame);
+            }
+            table_ppn = pte.ppn();
+        }
+
+        // 理论上不会执行到这里
+        None
+    }
+
+    // 获取一个虚拟页号对应的物理页号，如果不存在则返回None
+    fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
+        let idx = vpn.indexes();
+
+        let mut table_ppn = self.root_table_ppn;
+        for i in 0..3 {
+            let pte = &mut table_ppn.get_pte_array()[idx[i]];
+            if i == 2 {
+                return Some(pte);
+            }
+            if !pte.is_valid() {
+                return None;
+            }
+            table_ppn = pte.ppn();
+        }
+
+        None
     }
 }
