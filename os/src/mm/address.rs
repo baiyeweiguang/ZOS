@@ -8,11 +8,15 @@ use crate::{
 use super::page_table::PageTableEntry;
 
 // PA: Physical Address
+// VA: Virtual Address
+// 这两个地址的Page Offset都是12位，这是由页面大小(4K)决定的
+// 但是物理地址的页帧号由44位表示，而虚拟地址的页号由27位表示
 pub const PA_WIDTH_SV39: usize = 56;
 pub const VA_WIDTH_SV39: usize = 39;
 // PPN: Physical Page Number
-pub const PPN_WIDTH_SV39: usize = PA_WIDTH_SV39 - PAGE_SIZE_BITS;
-pub const VPN_WIDTH_SV39: usize = VA_WIDTH_SV39 - PAGE_SIZE_BITS;
+// VPN: Virtual Page Number
+pub const PPN_WIDTH_SV39: usize = PA_WIDTH_SV39 - PAGE_SIZE_BITS; // 44
+pub const VPN_WIDTH_SV39: usize = VA_WIDTH_SV39 - PAGE_SIZE_BITS; // 39
 
 /// Definitions
 /// physical address
@@ -120,6 +124,14 @@ impl StepByOne for VirtPageNum {
 // VPNRange 可视为虚拟内存上一段连续的空间
 pub type VPNRange = SimpleRange<VirtPageNum>;
 
+impl From<usize> for PhysAddr {
+    fn from(v: usize) -> Self {
+        // 1 << PA_WIDTH_SV39 - 1 = 0x00ff_ffff_ffff_ffff, 取低56位
+        Self(v & ((1 << PA_WIDTH_SV39) - 1))
+    }
+}
+
+
 impl From<PhysAddr> for PhysPageNum {
     fn from(v: PhysAddr) -> Self {
         assert_eq!(v.page_offset(), 0);
@@ -127,10 +139,34 @@ impl From<PhysAddr> for PhysPageNum {
     }
 }
 
+impl From<usize> for PhysPageNum {
+    fn from(v: usize) -> Self {
+        Self(v & ((1 << PPN_WIDTH_SV39) - 1))
+    }
+}
+
 impl From<PhysPageNum> for PhysAddr {
     fn from(v: PhysPageNum) -> Self {
         // Self(v.0 * PAGE_SIZE)
         Self(v.0 << PAGE_SIZE_BITS)
+    }
+}
+
+impl From<usize> for VirtAddr {
+    fn from(v: usize) -> Self {
+        Self(v & ((1 << VA_WIDTH_SV39) - 1))
+    }
+}
+
+impl From<VirtPageNum> for VirtAddr  {
+    fn from(v: VirtPageNum) -> Self {
+        Self(v.0 << PAGE_SIZE_BITS)
+    }
+}
+
+impl From<usize> for VirtPageNum {
+    fn from(v: usize) -> Self {
+        Self(v & ((1 << VPN_WIDTH_SV39) - 1))
     }
 }
 
@@ -146,27 +182,9 @@ impl From<PhysPageNum> for usize {
     }
 }
 
-impl From<usize> for PhysAddr {
-    fn from(v: usize) -> Self {
-        // 1 << PA_WIDTH_SV39 - 1 = 0x00ff_ffff_ffff_ffff, 取低56位
-        Self(v & ((1 << PA_WIDTH_SV39) - 1))
-    }
-}
-
-impl From<usize> for PhysPageNum {
-    fn from(v: usize) -> Self {
-        Self(v & ((1 << PPN_WIDTH_SV39) - 1))
-    }
-}
-
-impl From<usize> for VirtAddr {
-    fn from(v: usize) -> Self {
-        Self(v & ((1 << VA_WIDTH_SV39) - 1))
-    }
-}
-impl From<usize> for VirtPageNum {
-    fn from(v: usize) -> Self {
-        Self(v & ((1 << VPN_WIDTH_SV39) - 1))
+impl From<VirtAddr> for usize {
+    fn from(v: VirtAddr) -> Self {
+        v.0
     }
 }
 
