@@ -9,6 +9,7 @@ use super::{
 };
 use alloc::{collections::btree_map::BTreeMap, vec::Vec};
 use bitflags::bitflags;
+use riscv::addr::page;
 
 // 虚拟页面到物理页面的映射类型
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -30,6 +31,7 @@ bitflags! {
 pub struct MapArea {
     vpn_range: VPNRange,
     // 用于保存每个虚拟页面与对应的物理页帧的键值对
+    // 只有Framed类型的MapArea才会用到这个字段
     data_frames: BTreeMap<VirtPageNum, FrameTracker>,
     map_type: MapType,
     map_perm: MapPermission,
@@ -73,6 +75,12 @@ impl MapArea {
         page_table.map(vpn, ppn, flags);
     }
 
+    pub fn unmap(&mut self, page_table: &mut PageTable) {
+        for vpn in self.vpn_range {
+            self.unmap_one(page_table, vpn);
+        }
+    }
+
     #[allow(unused)]
     pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         // let ppn = match self.map_type {
@@ -82,10 +90,10 @@ impl MapArea {
         //     frame.ppn
         //   }
         // };
-        // page_table.unmap(vpn);
-        // frame_dealloc(ppn);
+        // page_table.unmap(ppn);
 
         // 为什么不是上面的逻辑？
+        // 哦，下面只是上面的简化版，没事了
         if self.map_type == MapType::Framed {
             self.data_frames.remove(&vpn);
         }
@@ -103,7 +111,7 @@ impl MapArea {
 
             // let dst_pa: PhysAddr = page_table.translate(current_vpn).unwrap().ppn().into();
             // let dst: &mut [u8] =
-                // unsafe { core::slice::from_raw_parts_mut(dst_pa.0 as *mut u8, PAGE_SIZE) };
+            // unsafe { core::slice::from_raw_parts_mut(dst_pa.0 as *mut u8, PAGE_SIZE) };
 
             // 已经实现了接口将ppn转为&mut [u8]，所以不用上面的那个了
             let dst = page_table
@@ -137,9 +145,34 @@ impl MemorySet {
         }
     }
 
+    // pub fn new_kernel() -> Self {
+        
+    // }
+
     // 在地址空间中插入一个新的逻辑段map_area，data为可选的初始化数据
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
         map_area.map(&mut self.page_table);
-        if let Some(data) = data {}
+
+        if let Some(data) = data {
+            map_area.copy_data(&self.page_table, data);
+        }
+
+        self.areas.push(map_area);
     }
+
+    pub fn insert_framed_area(
+        &mut self,
+        start_va: VirtAddr,
+        end_va: VirtAddr,
+        permission: MapPermission,
+    ) {
+        self.push(
+            MapArea::new(start_va, end_va, MapType::Framed, permission),
+            None,
+        );
+    }
+
+    // pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize) {
+
+    // }
 }
