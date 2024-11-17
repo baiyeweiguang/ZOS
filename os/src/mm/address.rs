@@ -1,6 +1,9 @@
 use core::fmt::{Debug, Formatter};
 
-use crate::config::{PAGE_SIZE, PAGE_SIZE_BITS};
+use crate::{
+    config::{PAGE_SIZE, PAGE_SIZE_BITS},
+    lang_items::{SimpleRange, StepByOne},
+};
 
 use super::page_table::PageTableEntry;
 
@@ -49,19 +52,25 @@ impl PhysAddr {
     }
 
     pub fn ceil(&self) -> PhysPageNum {
-        PhysPageNum((self.0 + PAGE_SIZE - 1) / PAGE_SIZE)
+        if self.0 == 0 {
+            // self.0是usize，等于0时-1会溢出，所以需要单独判断
+            PhysPageNum(0)
+        } else {
+            PhysPageNum((self.0 + PAGE_SIZE - 1) / PAGE_SIZE)
+        }
     }
 }
 
 impl PhysPageNum {
+    // As a reference lifetime, &'static ndicates the data
+    // pointed to by the reference lives as long as the running program.
+    // But it can still be coerced to a shorter lifetime.
     pub fn get_pte_array(&self) -> &'static mut [PageTableEntry] {
         let pa: PhysAddr = self.clone().into();
         unsafe { core::slice::from_raw_parts_mut(pa.0 as *mut PageTableEntry, 512) }
     }
 
-    // As a reference lifetime, &'static ndicates the data
-    // pointed to by the reference lives as long as the running program.
-    // But it can still be coerced to a shorter lifetime.
+    // 相当于转成指针，可以直接操作的内存
     pub fn get_bytes_array(&self) -> &'static mut [u8] {
         let pa: PhysAddr = (*self).into();
         unsafe { core::slice::from_raw_parts_mut(pa.0 as *mut u8, PAGE_SIZE) }
@@ -70,6 +79,20 @@ impl PhysPageNum {
     pub fn get_mut<T>(&self) -> &'static mut T {
         let pa: PhysAddr = self.clone().into();
         unsafe { (pa.0 as *mut T).as_mut().unwrap() }
+    }
+}
+
+impl VirtAddr {
+    pub fn floor(&self) -> VirtPageNum {
+        VirtPageNum(self.0 / PAGE_SIZE)
+    }
+
+    pub fn ceil(&self) -> VirtPageNum {
+        if self.0 == 0 {
+            VirtPageNum(0)
+        } else {
+            VirtPageNum((self.0 + PAGE_SIZE - 1) / PAGE_SIZE)
+        }
     }
 }
 
@@ -86,6 +109,16 @@ impl VirtPageNum {
         idx
     }
 }
+
+impl StepByOne for VirtPageNum {
+    fn step(&mut self) {
+        // 虚拟地址+1即可
+        self.0 += 1;
+    }
+}
+
+// VPNRange 可视为虚拟内存上一段连续的空间
+pub type VPNRange = SimpleRange<VirtPageNum>;
 
 impl From<PhysAddr> for PhysPageNum {
     fn from(v: PhysAddr) -> Self {
