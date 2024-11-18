@@ -62,6 +62,18 @@ impl PageTableEntry {
     pub fn is_accessed(&self) -> bool {
         (self.flags() & PTEFlags::A) != PTEFlags::empty()
     }
+
+    pub fn writable(&self) -> bool {
+        (self.flags() & PTEFlags::W) != PTEFlags::empty()
+    }
+
+    pub fn readable(&self) -> bool {
+        (self.flags() & PTEFlags::R) != PTEFlags::empty()
+    }
+
+    pub fn executable(&self) -> bool {
+        (self.flags() & PTEFlags::X) != PTEFlags::empty()
+    }
 }
 
 pub struct PageTable {
@@ -101,8 +113,15 @@ impl PageTable {
         self.find_pte(vpn).map(|pte| pte.clone())
     }
 
+    pub fn token(&self) -> usize {
+        // 左边 0b1000 << 60 将satp的MODE字段设置为8 表示启用Sv39模式
+        // 右边 将根页表所在物理页号写到satp中
+        0b1000usize << 60 | self.root_table_ppn.0
+    }
+
     /// Temporarily used to get arguments from user space.
     pub fn from_token(satp: usize) -> Self {
+        // satp: 用于控制分页机制的CSR
         Self {
             root_table_ppn: PhysPageNum::from(satp & ((1usize << 44) - 1)),
             frames: Vec::new(),

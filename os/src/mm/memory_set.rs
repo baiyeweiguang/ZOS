@@ -1,19 +1,21 @@
-use core::{cmp::min, iter::Map, mem};
+use core::{arch::asm, cmp::min, iter::Map, mem};
 
 use crate::{
     config::{MEMORY_END, PAGE_SIZE, TRAMPOLINE_ADDRESS, TRAP_CONTEXT_ADDRESS, USER_STACK_SIZE},
     lang_items::StepByOne,
     println,
+    sync::UPSafeCell,
 };
 
 use super::{
     address::{PhysAddr, PhysPageNum, VPNRange, VirtAddr, VirtPageNum},
     frame_allocator::{frame_alloc, FrameTracker},
-    page_table::{PTEFlags, PageTable},
+    page_table::{PTEFlags, PageTable, PageTableEntry},
 };
-use alloc::{collections::btree_map::BTreeMap, vec::Vec};
+use alloc::{collections::btree_map::BTreeMap, sync::Arc, vec::Vec};
 use bitflags::bitflags;
-use riscv::addr::page;
+use lazy_static::lazy_static;
+use riscv::register::satp;
 
 extern "C" {
     fn strampoline();
@@ -162,6 +164,19 @@ impl MemorySet {
         }
     }
 
+    pub fn token(&self) -> usize {
+        self.page_table.token()
+    }
+
+    pub fn activate(&self) {
+        let satp = self.token();
+        unsafe {
+            satp::write(satp);
+            // sfence.vma指令用于刷新TLB
+            asm!("sfence.vma");
+        }
+    }
+
     // 创建内核的地址空间
     pub fn new_kernel() -> Self {
         let mut memory_set = Self::new_bare();
@@ -289,7 +304,7 @@ impl MemorySet {
         let ph_count = elf_header.pt2.ph_count();
         let mut max_end_vpn = VirtPageNum(0);
 
-        // 为每个程序段创建一个MapArea 
+        // 为每个程序段创建一个MapArea
         for i in 0..ph_count {
             let ph = elf.program_header(i).unwrap();
             if ph.get_type().unwrap() == xmas_elf::program::Type::Load {
@@ -317,14 +332,14 @@ impl MemorySet {
                 );
             }
         }
-        
+
         // 计算用户栈的起始地址
         // map user stack with U flags
         let max_end_va: VirtAddr = max_end_vpn.into();
         let mut user_stack_bottom: usize = max_end_va.into();
 
         // 栈的前一页留给guard page
-        // 所以内存分布为[.text, .rodata, .data, .bss, guard page, user stack, (very big space), trap context, trampoline] 
+        // 所以内存分布为[.text, .rodata, .data, .bss, guard page, user stack, (very big space), trap context, trampoline]
         user_stack_bottom += PAGE_SIZE;
 
         // 用户栈的顶部地址
@@ -358,4 +373,57 @@ impl MemorySet {
             elf.header.pt2.entry_point() as usize,
         )
     }
+
+    pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
+        self.page_table.translate(vpn)
+    }
+}
+
+// 全局的内核地址空间
+lazy_static! {
+    pub static ref KERNEL_SPACE: Arc<UPSafeCell<MemorySet>> =
+        Arc::new(UPSafeCell::new(MemorySet::new_kernel()));
+}
+
+// 一个简单的检查程序
+#[allow(unused)]
+pub fn remap_test() {
+    let memory_set = KERNEL_SPACE.exclusive_access();
+
+    // RX
+    let mid_text: VirtAddr = (stext as usize + (etext as usize - stext as usize) / 2).into();
+    // R
+    let mid_data: VirtAddr = (sdata as usize + (edata as usize - sdata as usize) / 2).into();
+    // RW
+    let mid_bss: VirtAddr =
+        (sbss_with_stack as usize + (ebss as usize - sbss_with_stack as usize) / 2).into();
+
+    assert_eq!(
+        memory_set
+            .page_table
+            .translate(mid_text.floor())
+            .unwrap()
+            .writable(),
+        false
+    );
+
+    assert_eq!(
+        memory_set
+            .page_table
+            .translate(mid_data.floor())
+            .unwrap()
+            .writable(),
+        false
+    );
+
+    assert_eq!(
+        memory_set
+            .page_table
+            .translate(mid_bss.floor())
+            .unwrap()
+            .executable(),
+        false
+    );
+
+    println!("remap test passed!");
 }

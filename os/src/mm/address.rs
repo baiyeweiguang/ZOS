@@ -51,8 +51,10 @@ impl PhysAddr {
         // 换个思路理解，单个页面的大小设置为4KiB，每个虚拟页面和物理页帧都对齐到这个页面大小，
         // 也就是说虚拟/物理地址区间[0.4KiB)为第0个虚拟页面/物理页帧，而[4KiB,8KiB)为第1个，依次类推
         // 所以物理地址/4KiB=物理页帧号
+
+        // 右移相当于向下取整的除法
+        // 等价于self.0 >> PAGE_SIZE_BITS
         PhysPageNum(self.0 / PAGE_SIZE)
-        // 因为需要保证物理页号与页面大小对齐，才能通过右移转换为物理页号，所以这里只能用 /
     }
 
     pub fn ceil(&self) -> PhysPageNum {
@@ -98,6 +100,10 @@ impl VirtAddr {
             VirtPageNum((self.0 + PAGE_SIZE - 1) / PAGE_SIZE)
         }
     }
+
+    pub fn page_offset(&self) -> usize {
+        self.0 & (PAGE_SIZE - 1)
+    }
 }
 
 impl VirtPageNum {
@@ -131,7 +137,6 @@ impl From<usize> for PhysAddr {
     }
 }
 
-
 impl From<PhysAddr> for PhysPageNum {
     fn from(v: PhysAddr) -> Self {
         assert_eq!(v.page_offset(), 0);
@@ -158,7 +163,7 @@ impl From<usize> for VirtAddr {
     }
 }
 
-impl From<VirtPageNum> for VirtAddr  {
+impl From<VirtPageNum> for VirtAddr {
     fn from(v: VirtPageNum) -> Self {
         Self(v.0 << PAGE_SIZE_BITS)
     }
@@ -167,6 +172,13 @@ impl From<VirtPageNum> for VirtAddr  {
 impl From<usize> for VirtPageNum {
     fn from(v: usize) -> Self {
         Self(v & ((1 << VPN_WIDTH_SV39) - 1))
+    }
+}
+
+impl From<VirtAddr> for VirtPageNum {
+    fn from(v: VirtAddr) -> Self {
+        assert_eq!(v.page_offset(), 0);
+        v.floor()
     }
 }
 

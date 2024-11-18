@@ -14,3 +14,10 @@ pub const APP_BASE_ADDRESS: usize = 0x80400000;
 pub const APP_SIZE_LIMIT: usize = 0x20000;
 
 pub use crate::board::CLOCK_FREQ;
+
+/// Return (bottom, top) of a kernel stack of specific app in kernel space.
+pub fn kernel_stack_position(app_id: usize) -> (usize, usize) {
+    let top = TRAMPOLINE_ADDRESS - app_id * (KERNEL_STACK_SIZE + PAGE_SIZE);
+    let bottom = top - KERNEL_STACK_SIZE;
+    (bottom, top)
+}

@@ -11,6 +11,13 @@ pub struct TrapContext {
     /// CSR sepc
     /// 当 Trap 是一个异常的时候，记录 Trap 发生之前执行的最后一条指令的地址
     pub sepc: usize,
+    // 下面三个字段只在初始化时赋值，不会在运行时改变
+    /// 表示内核地址空间的 token ，即内核页表的起始物理地址
+    pub kernel_satp: usize,
+    /// 当前应用在内核地址空间中的内核栈栈顶指针的虚拟地址
+    pub kernel_sp: usize,
+    /// 内核中trap_handler的虚拟地址
+    pub trap_handler: usize,
 }
 
 impl TrapContext {

@@ -28,6 +28,8 @@ impl TaskContext {
             fn __restore();
         }
 
+        // 在__switch函数的最后一行，会调用汇编指令ret
+        // 然后CPU会跳转到ra寄存器中的地址，也就是__restore函数，并继续往下执行
         Self {
             ra: __restore as usize,
             sp: kstack_ptr,
