@@ -5,8 +5,6 @@
 extern crate alloc;
 use core::arch::global_asm;
 
-use buddy_system_allocator::Heap;
-
 // macro_use用来将console的宏导出来 下面的lang_items也能用print和println
 #[macro_use]
 mod sync;

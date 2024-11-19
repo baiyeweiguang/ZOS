@@ -1,9 +1,7 @@
-use riscv::register::scause::Trap;
-
 use super::TaskContext;
 use crate::{
     config::{kernel_stack_position, TRAP_CONTEXT_ADDRESS},
-    mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, VirtPageNum, KERNEL_SPACE},
+    mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE},
     trap::{trap_handler, TrapContext},
 };
 
@@ -14,6 +12,7 @@ use crate::{
 // #[derive(Copy, Clone)]
 #[derive(Copy, Clone, PartialEq)]
 pub enum TaskStatus {
+    #[allow(dead_code)]
     UnInit,
     Ready,
     Running,
@@ -26,6 +25,7 @@ pub struct TaskControlBlock {
     pub memory_set: MemorySet,
     pub trap_cx_ppn: PhysPageNum,
     // 统计应用数据的大小
+    #[allow(dead_code)]
     pub base_size: usize,
     pub heap_bottom: usize,
     pub program_brk: usize,

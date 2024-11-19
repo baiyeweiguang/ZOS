@@ -30,6 +30,6 @@ macro_rules! print {
 macro_rules! println {
     // ,: 这个模式用,进行分割 tt:token tree +:表示匹配一个或多个模式 ?:整个模式是可选的
     ($fmt: literal $(, $($arg: tt)+)?) => {
-        $crate::console::print(format_args!(concat!($fmt, "\n") $(, $($arg)+)?));
+        $crate::console::print(format_args!(concat!($fmt, "\n") $(, $($arg)+)?))
     }
 }

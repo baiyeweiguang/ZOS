@@ -1,4 +1,4 @@
-use core::{arch::asm, cmp::min, iter::Map, mem};
+use core::{arch::asm, cmp::min};
 
 use crate::{
     config::{MEMORY_END, PAGE_SIZE, TRAMPOLINE_ADDRESS, TRAP_CONTEXT_ADDRESS, USER_STACK_SIZE},
@@ -8,7 +8,7 @@ use crate::{
 };
 
 use super::{
-    address::{PhysAddr, PhysPageNum, VPNRange, VirtAddr, VirtPageNum},
+    address::{PhysPageNum, VPNRange, VirtAddr, VirtPageNum},
     frame_allocator::{frame_alloc, FrameTracker},
     page_table::{PTEFlags, PageTable, PageTableEntry},
 };

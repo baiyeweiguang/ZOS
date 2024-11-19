@@ -13,8 +13,8 @@ pub const TRAMPOLINE_ADDRESS: usize = usize::MAX - PAGE_SIZE + 1;
 pub const TRAP_CONTEXT_ADDRESS: usize = TRAMPOLINE_ADDRESS - PAGE_SIZE;
 
 // pub const MAX_APP_NUM: usize = 5;
-pub const APP_BASE_ADDRESS: usize = 0x80400000;
-pub const APP_SIZE_LIMIT: usize = 0x20000;
+// pub const APP_BASE_ADDRESS: usize = 0x80400000;
+// pub const APP_SIZE_LIMIT: usize = 0x20000;
 
 pub use crate::board::CLOCK_FREQ;
 

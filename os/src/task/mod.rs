@@ -2,7 +2,6 @@ mod context;
 mod switch;
 mod task;
 
-use core::borrow::Borrow;
 use core::panic;
 
 use alloc::vec::Vec;
@@ -144,6 +143,7 @@ impl TaskManager {
         inner.tasks[inner.current_task].get_user_token()
     }
 
+    #[allow(unused)]
     fn get_current_trap_cx(&self) -> &'static mut TrapContext {
         let inner = self.inner.exclusive_access();
         inner.tasks[inner.current_task].get_trap_cx()
@@ -174,6 +174,7 @@ pub fn current_user_token() -> usize {
     TASK_MANAGER.get_current_token()
 }
 
+#[allow(unused)]
 pub fn current_trap_cx() -> &'static mut TrapContext {
     TASK_MANAGER.get_current_trap_cx()
 }

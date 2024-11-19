@@ -1,5 +1,5 @@
 //! File and filesystem-related syscalls
-use crate::{mm::translate_buffer, print, println, task::current_user_token};
+use crate::{mm::translate_buffer, print, task::current_user_token};
 
 const FD_STDOUT: usize = 1;
 

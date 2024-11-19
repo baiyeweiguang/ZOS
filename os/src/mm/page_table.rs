@@ -2,9 +2,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use bitflags::*;
-use riscv::addr::page;
 
-use crate::config::PAGE_SIZE;
 use crate::lang_items::StepByOne;
 
 use super::address::PhysPageNum;

@@ -41,9 +41,9 @@ impl TrapContext {
         let mut cx = Self {
             x: [0; 32],
             sstatus: sstatus,
-            sepc: entry, // 应用程序的入口地址
-            kernel_satp: kernel_satp, // 页表地址
-            kernel_sp: kernel_sp, // 内核栈的栈顶指针
+            sepc: entry,                // 应用程序的入口地址
+            kernel_satp: kernel_satp,   // 页表地址
+            kernel_sp: kernel_sp,       // 内核栈的栈顶指针
             trap_handler: trap_handler, // trap_handler的地址
         };
 

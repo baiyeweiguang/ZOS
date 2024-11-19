@@ -63,7 +63,7 @@ use lazy_static::lazy_static;
 type FrameAllocatorImpl = StackFrameAllocator;
 lazy_static! {
     pub static ref FRAME_ALLOCATOR: UPSafeCell<FrameAllocatorImpl> =
-        unsafe { UPSafeCell::new(FrameAllocatorImpl::new()) };
+        UPSafeCell::new(FrameAllocatorImpl::new());
 }
 
 pub fn init_frame_allocator() {
