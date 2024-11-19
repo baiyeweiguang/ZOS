@@ -144,9 +144,15 @@ impl TaskManager {
         inner.tasks[inner.current_task].get_user_token()
     }
 
-    fn get_current_trap_cx(&self)-> &'static mut TrapContext {
+    fn get_current_trap_cx(&self) -> &'static mut TrapContext {
         let inner = self.inner.exclusive_access();
         inner.tasks[inner.current_task].get_trap_cx()
+    }
+
+    pub fn change_program_brk(&self, size: i32) -> Option<usize> {
+        let mut inner = self.inner.exclusive_access();
+        let i = inner.current_task;
+        inner.tasks[i].change_program_brk(size)
     }
 }
 
@@ -170,4 +176,8 @@ pub fn current_user_token() -> usize {
 
 pub fn current_trap_cx() -> &'static mut TrapContext {
     TASK_MANAGER.get_current_trap_cx()
+}
+
+pub fn change_program_brk(size: i32) -> Option<usize> {
+    TASK_MANAGER.change_program_brk(size)
 }

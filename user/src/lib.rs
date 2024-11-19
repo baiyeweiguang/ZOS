@@ -54,3 +54,10 @@ pub fn yield_() -> isize {
 pub fn get_time() -> isize {
     sys_get_time()
 }
+
+/// sbrk() increments the program's data space by increment bytes.  Calling
+/// sbrk() with an increment of 0 can be used to find the current  location
+/// of the program break.
+pub fn sbrk(size: i32) -> isize {
+    sys_sbrk(size)
+}

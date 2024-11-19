@@ -94,6 +94,8 @@ impl MapArea {
         page_table.map(vpn, ppn, flags);
     }
 
+    #[allow(unused)]
+    /// unmap所有
     pub fn unmap(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range {
             self.unmap_one(page_table, vpn);
@@ -117,6 +119,22 @@ impl MapArea {
             self.data_frames.remove(&vpn);
         }
         page_table.unmap(vpn.0.into());
+    }
+
+    #[allow(unused)]
+    pub fn shrink_to(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
+        for vpn in VPNRange::new(new_end, self.vpn_range.get_end()) {
+            self.unmap_one(page_table, vpn);
+        }
+        self.vpn_range = VPNRange::new(self.vpn_range.get_start(), new_end);
+    }
+
+    #[allow(unused)]
+    pub fn append_to(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
+        for vpn in VPNRange::new(self.vpn_range.get_end(), new_end) {
+            self.map_one(page_table, vpn);
+        }
+        self.vpn_range = VPNRange::new(self.vpn_range.get_start(), new_end);
     }
 
     pub fn copy_data(&mut self, page_table: &PageTable, data: &[u8]) {
@@ -279,6 +297,33 @@ impl MemorySet {
         )
     }
 
+    #[allow(unused)]
+    pub fn shrink_to(&mut self, start: VirtAddr, new_end: VirtAddr) -> bool {
+        if let Some(area) = self
+            .areas
+            .iter_mut()
+            .find(|area| area.vpn_range.get_start() == start.floor())
+        {
+            area.shrink_to(&mut self.page_table, new_end.floor());
+            true
+        } else {
+            false
+        }
+    }
+
+    #[allow(unused)]
+    pub fn append_to(&mut self, start: VirtAddr, new_end: VirtAddr) -> bool {
+        if let Some(area) = self
+            .areas
+            .iter_mut()
+            .find(|area| area.vpn_range.get_start() == start.floor())
+        {
+            true
+        } else {
+            false
+        }
+    }
+
     /// Include sections in elf and trampoline and TrapContext and user stack,
     /// also returns user_sp and entry point.
     // 从elf文件中加载用户程序，创建其地址空间
@@ -340,6 +385,7 @@ impl MemorySet {
 
         // 栈的前一页留给guard page
         // 所以内存分布为[.text, .rodata, .data, .bss, guard page, user stack, (very big space), trap context, trampoline]
+        // 在这个版本中，似乎每个程序是没有堆的，所有程序共用内核.bss段的空间作为堆
         user_stack_bottom += PAGE_SIZE;
 
         // 用户栈的顶部地址

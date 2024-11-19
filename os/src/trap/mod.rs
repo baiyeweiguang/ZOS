@@ -18,14 +18,12 @@ use riscv::register::{
 
 global_asm!(include_str!("trap.S"));
 
-
 pub fn init() {
     set_kernel_trap_entry();
 
     // extern "C" {
-        // fn __alltraps();
+    // fn __alltraps();
     // }
-    
 
     // unsafe {
     //     stvec::write(__alltraps as usize, stvec::TrapMode::Direct);
@@ -41,7 +39,7 @@ pub fn enable_timer_interrupt() {
 }
 
 #[no_mangle]
-pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
+pub fn trap_handler(cx: &mut TrapContext) -> ! {
     let scause = scause::read(); // get trap cause
     let stval = stval::read(); // get extra value
     match scause.cause() {
@@ -50,8 +48,11 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
             cx.sepc += 4;
             cx.x[10] = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize;
         }
-        Trap::Exception(Exception::StoreFault) | Trap::Exception(Exception::StorePageFault) => {
-            println!("[kernel] PageFault in application, kernel killed it.");
+        Trap::Exception(Exception::StoreFault)
+        | Trap::Exception(Exception::StorePageFault)
+        | Trap::Exception(Exception::LoadFault)
+        | Trap::Exception(Exception::LoadPageFault) => {
+            println!("[kernel] PageFault in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.", stval, cx.sepc);
             exit_current_and_run_next();
         }
         Trap::Exception(Exception::IllegalInstruction) => {
@@ -70,7 +71,7 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
             );
         }
     }
-    cx
+    trap_return();
 }
 
 fn set_kernel_trap_entry() {

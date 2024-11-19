@@ -1,1 +1,0 @@
-/root/ZOS/user/target/riscv64gc-unknown-none-elf/release/01power_5: /root/ZOS/user/src/bin/01power_5.rs /root/ZOS/user/src/console.rs /root/ZOS/user/src/lang_items.rs /root/ZOS/user/src/lib.rs /root/ZOS/user/src/syscall.rs
