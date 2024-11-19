@@ -28,14 +28,23 @@ impl TrapContext {
 
     // 开辟一个栈空间（TrapContext），设置了sstatus、sepc和sp三个寄存器，其他寄存器都初始化为0
     // 用于初始化TrapContext，构造一个用户态的默认上下文
-    pub fn new_setted_app_entry(entry: usize, sp: usize) -> Self {
+    pub fn app_init_context(
+        entry: usize,
+        sp: usize,
+        kernel_satp: usize,
+        kernel_sp: usize,
+        trap_handler: usize,
+    ) -> Self {
         let mut sstatus = sstatus::read();
         sstatus.set_spp(SPP::User);
 
         let mut cx = Self {
             x: [0; 32],
             sstatus: sstatus,
-            sepc: entry,
+            sepc: entry, // 应用程序的入口地址
+            kernel_satp: kernel_satp, // 页表地址
+            kernel_sp: kernel_sp, // 内核栈的栈顶指针
+            trap_handler: trap_handler, // trap_handler的地址
         };
 
         cx.set_sp(sp);

@@ -8,8 +8,8 @@ pub fn get_num_app() -> usize {
     unsafe { (_num_app as usize as *const usize).read_volatile() }
 }
 
-/// get applications data
-/// 这里的地址都是虚拟地址
+/// get applications data, return elf data
+// 这里的地址都是虚拟地址
 pub fn get_app_data(app_id: usize) -> &'static [u8] {
     extern "C" {
         fn _num_app();

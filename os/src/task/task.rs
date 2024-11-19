@@ -1,7 +1,9 @@
+use riscv::register::scause::Trap;
+
 use super::TaskContext;
 use crate::{
     config::{kernel_stack_position, TRAP_CONTEXT_ADDRESS},
-    mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, VirtPageNum, KERNEL_SPACE},
+    mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, VirtPageNum, KERNEL_SPACE}, trap::{trap_handler, TrapContext},
 };
 
 // 通过 #[derive(...)] 可以让编译器为你的类型提供一些 Trait 的默认实现。
@@ -29,7 +31,7 @@ pub struct TaskControlBlock {
 }
 
 impl TaskControlBlock {
-    pub fn new(elf_data: &[u8], app_id: usize) {
+    pub fn new(elf_data: &[u8], app_id: usize) -> Self {
         // 解析elf文件
         let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
         // 为TrapContext预留的空间
@@ -57,5 +59,26 @@ impl TaskControlBlock {
             heap_bottom: user_sp,
             program_brk: user_sp,
         };
+
+        // 准备TrapContext
+        // 这里的trap_cx是已经存在于物理内存上的
+        let trap_cx = task_control_block.get_trap_cx();
+        *trap_cx = TrapContext::app_init_context(
+            entry_point,
+            user_sp,
+            KERNEL_SPACE.exclusive_access().token(),
+            kernel_stack_top,
+            trap_handler as usize,
+        );
+
+        task_control_block 
+    }
+
+    pub fn get_trap_cx(&self) -> &'static mut TrapContext {
+        self.trap_cx_ppn.get_mut()
+    }
+
+    pub fn get_user_token(&self) -> usize {
+        self.memory_set.token()
     }
 }
