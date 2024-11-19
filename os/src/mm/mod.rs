@@ -9,6 +9,8 @@ pub use address::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 pub use memory_set::MemorySet;
 pub use memory_set::MapPermission;
 
+pub use page_table::translate_buffer;
+
 pub fn init() {
     heap_allocator::init_heap();
     frame_allocator::init_frame_allocator();

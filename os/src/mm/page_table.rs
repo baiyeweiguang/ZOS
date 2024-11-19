@@ -2,12 +2,17 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use bitflags::*;
+use riscv::addr::page;
+
+use crate::config::PAGE_SIZE;
+use crate::lang_items::StepByOne;
 
 use super::address::PhysPageNum;
 use super::address::VirtPageNum;
 use super::address::PPN_WIDTH_SV39;
 use super::frame_allocator::frame_alloc;
 use super::frame_allocator::FrameTracker;
+use super::VirtAddr;
 
 bitflags! {
     pub struct PTEFlags: u8 {
@@ -169,4 +174,37 @@ impl PageTable {
 
         None
     }
+}
+
+/// 将一段缓冲区（连续的虚拟地址）翻译成若干个对应的物理页号
+/// 返回时自动转化为可直接访问的若干个[u8]
+pub fn translate_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static [u8]> {
+    let mut v: Vec<&[u8]> = Vec::new();
+    let page_table = PageTable::from_token(token);
+
+    let mut start = ptr as usize;
+    let end = start + len;
+    while start < end {
+        // 这里没考虑start是否对齐
+        let start_va = VirtAddr::from(start);
+        let mut vpn = start_va.floor();
+        let ppn = page_table.translate(vpn).unwrap().ppn();
+        vpn.step();
+
+        let mut end_va: VirtAddr = vpn.into();
+
+        end_va = end_va.min(VirtAddr::from(end));
+
+        if end_va.page_offset() == 0 {
+            // 此时end_va是下一页的起始地址
+            v.push(&ppn.get_bytes_array()[start_va.page_offset()..]);
+        } else {
+            // 此时end_va和start_va在同一页
+            v.push(&ppn.get_bytes_array()[start_va.page_offset()..end_va.page_offset()]);
+        }
+
+        start = end_va.into();
+    }
+
+    v
 }
