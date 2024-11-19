@@ -1,8 +1,6 @@
 use super::TaskContext;
 use crate::{
-    config::{kernel_stack_position, TRAP_CONTEXT_ADDRESS},
-    mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE},
-    trap::{trap_handler, TrapContext},
+    config::{kernel_stack_position, TRAP_CONTEXT_ADDRESS}, mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE}, println, trap::{trap_handler, TrapContext}
 };
 
 // 通过 #[derive(...)] 可以让编译器为你的类型提供一些 Trait 的默认实现。
@@ -35,6 +33,9 @@ impl TaskControlBlock {
     pub fn new(elf_data: &[u8], app_id: usize) -> Self {
         // 解析elf文件
         let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
+
+        // println!("current app id: {}, memory usage: {}KB", app_id, user_sp / 1024);
+
         // 为TrapContext预留的空间
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(TRAP_CONTEXT_ADDRESS).into())

@@ -1,9 +1,12 @@
+use core::panic;
+
 use alloc::vec;
 use alloc::vec::Vec;
 
 use bitflags::*;
 
 use crate::lang_items::StepByOne;
+use crate::println;
 
 use super::address::PhysPageNum;
 use super::address::VirtPageNum;
@@ -161,11 +164,11 @@ impl PageTable {
         let mut table_ppn = self.root_table_ppn;
         for i in 0..3 {
             let pte = &mut table_ppn.get_pte_array()[idx[i]];
-            if i == 2 {
-                return Some(pte);
-            }
             if !pte.is_valid() {
                 return None;
+            }
+            if i == 2 {
+                return Some(pte);
             }
             table_ppn = pte.ppn();
         }
@@ -205,4 +208,17 @@ pub fn translate_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'stati
     }
 
     v
+}
+
+#[allow(unused)]
+pub fn find_pte_test() {
+    let mut page_table = PageTable::new();
+    let vpn = VirtPageNum(0x123456789);
+    let ppn = PhysPageNum(0x987654321);
+    let flags = PTEFlags::V | PTEFlags::R | PTEFlags::W;
+    page_table.map(vpn, ppn, flags);
+    let pte = page_table.find_pte(vpn).unwrap();
+    assert_eq!(pte.ppn(), ppn);
+    assert_eq!(pte.flags(), flags);
+    println!("find_pte_test passed");
 }

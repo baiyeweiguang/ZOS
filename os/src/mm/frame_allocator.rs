@@ -31,10 +31,14 @@ impl FrameAllocator for StackFrameAllocator {
             if self.current < self.end {
                 let ppn = PhysPageNum(self.current);
                 self.current += 1;
-                return Some(ppn);
+                Some(ppn)
+            } else {
+                println!(
+                    "[kernel] No enough memory for frame allocation, current: {:#x}, end: {:#x}",
+                    self.current, self.end
+                );
+                None
             }
-
-            None
         }
     }
 
@@ -53,14 +57,20 @@ impl FrameAllocator for StackFrameAllocator {
 
 impl StackFrameAllocator {
     pub fn init(&mut self, start: PhysPageNum, end: PhysPageNum) {
+        println!(
+            "[kernel] FrameAllocator: init with start: {:#x}, end: {:#x}",
+            start.0, end.0
+        );
         self.current = start.0;
         self.end = end.0;
     }
 }
 
-use crate::{mm::address::PhysAddr, println, sync::UPSafeCell};
+use crate::{board::MEMORY_END, mm::address::PhysAddr, println, sync::UPSafeCell};
 use lazy_static::lazy_static;
 type FrameAllocatorImpl = StackFrameAllocator;
+
+// 全局的FrameAllocator
 lazy_static! {
     pub static ref FRAME_ALLOCATOR: UPSafeCell<FrameAllocatorImpl> =
         UPSafeCell::new(FrameAllocatorImpl::new());
@@ -73,7 +83,7 @@ pub fn init_frame_allocator() {
     // 头需要上取整，尾需要下取整，细节
     FRAME_ALLOCATOR.exclusive_access().init(
         PhysAddr::from(ekernel as usize).ceil(),
-        PhysAddr::from(crate::config::MEMORY_END).floor(),
+        PhysAddr::from(MEMORY_END).floor(),
     );
 }
 

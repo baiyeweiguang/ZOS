@@ -30,20 +30,24 @@ global_asm!(include_str!("link_app.S"));
 // 使用#[no_mangle]属性修饰 可以保证rust_main在汇编语言中的标签就是rust_main
 #[no_mangle]
 pub fn rust_main() -> ! {
+    println!("clear bss...");
     clear_bss();
-    println!("Hello wolrd");
-    trap::init();
+    println!("mm init...");
     mm::init();
+    println!("trap init...");
+    trap::init();
+    println!("timer init...");
     // loader::load_apps();
     trap::enable_timer_interrupt();
     timer::set_next_trigger();
+    println!("task init...");
     task::run_first_task();
     panic!("Unreachable in rust_main");
 }
 
 fn clear_bss() {
     extern "C" {
-        // 这些函数的ABI与C语言兼容
+        // 引入外部符号
         fn sbss();
         fn ebss();
     }

@@ -110,7 +110,7 @@ impl VirtPageNum {
     // 获取这个虚拟页表的三级页表的索引
     pub fn indexes(&self) -> [usize; 3] {
         let mut vpn = self.0;
-        let mut idx: [usize; 3] = [0; 3];
+        let mut idx = [0usize; 3];
         for i in (0..3).rev() {
             // 取低9位
             idx[i] = vpn & 0b111111111; // 9 bits

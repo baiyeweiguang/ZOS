@@ -100,6 +100,7 @@ fn trap_from_kernel() {
 
 #[no_mangle]
 pub fn trap_return() -> ! {
+    println!("trap_return");
     // 让应用在U->S时，可以跳转到__alltraps
     set_user_trap_entry();
     let trap_cx_ptr = TRAP_CONTEXT_ADDRESS;

@@ -4,7 +4,7 @@ pub const USER_STACK_SIZE: usize = 4096 * 2;
 pub const PAGE_SIZE: usize = 0x1000;
 pub const PAGE_SIZE_BITS: usize = 0xc; // 12
 
-pub const MEMORY_END: usize = 0x80800000; // 8M
+// pub const MEMORY_END: usize = 0x88000000; // 8M
 
 // 跳板的地址 放在最高处
 // TRAPOLINE_ADDRESS和TRAP_CONTEXT_ADDRESS都是在应用虚拟空间中
@@ -16,7 +16,7 @@ pub const TRAP_CONTEXT_ADDRESS: usize = TRAMPOLINE_ADDRESS - PAGE_SIZE;
 // pub const APP_BASE_ADDRESS: usize = 0x80400000;
 // pub const APP_SIZE_LIMIT: usize = 0x20000;
 
-pub use crate::board::CLOCK_FREQ;
+pub use crate::board::{CLOCK_FREQ, MEMORY_END};
 
 /// Return (bottom, top) of a kernel stack of specific app in kernel space.
 pub fn kernel_stack_position(app_id: usize) -> (usize, usize) {

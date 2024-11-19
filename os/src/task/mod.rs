@@ -43,29 +43,25 @@ pub struct TaskManagerInner {
 }
 
 lazy_static! {
-  /// Global variable: TASK_MANAGER
-  pub static ref TASK_MANAGER: TaskManager = {
-      let num_app = get_num_app();
-
-      let mut tasks: Vec<TaskControlBlock> = Vec::new();
-
-      for i in 0..num_app {
-        tasks.push(TaskControlBlock::new(
-            get_app_data(i),
-            i,
-        ));
-      }
-
-      TaskManager {
-          num_app,
-          inner:
-              UPSafeCell::new(TaskManagerInner {
-                  tasks,
-                  current_task: 0,
-              })
-          ,
-      }
-  };
+    /// a `TaskManager` global instance through lazy_static!
+    pub static ref TASK_MANAGER: TaskManager = {
+        println!("init TASK_MANAGER");
+        let num_app = get_num_app();
+        println!("num_app = {}", num_app);
+        let mut tasks: Vec<TaskControlBlock> = Vec::new();
+        for i in 0..num_app {
+            tasks.push(TaskControlBlock::new(get_app_data(i), i));
+        }
+        TaskManager {
+            num_app,
+            inner: unsafe {
+                UPSafeCell::new(TaskManagerInner {
+                    tasks,
+                    current_task: 0,
+                })
+            },
+        }
+    };
 }
 
 impl TaskManager {
@@ -106,6 +102,7 @@ impl TaskManager {
     // 调用链为run_first_task->__switch->trap_return->__restore->UserCode
     // 在trap_return函数中，我们设置了stvec为TRAMPOLINE_ADDRESS，相当于设置了中断处理函数的入口地址
     fn run_first_task(&self) -> ! {
+        println!("run_first_task");
         let mut inner = self.inner.exclusive_access();
         let next_task_cx_ptr = &mut inner.tasks[0].task_cx as *mut TaskContext;
 

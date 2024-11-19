@@ -88,7 +88,7 @@ impl MapArea {
                 self.data_frames.insert(vpn, frame);
                 ppn
             }
-        };
+        }; 
 
         let flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
         page_table.map(vpn, ppn, flags);
@@ -138,7 +138,7 @@ impl MapArea {
     }
 
     pub fn copy_data(&mut self, page_table: &PageTable, data: &[u8]) {
-        let len = data.len();
+        let mut len = data.len();
         let mut current_vpn = self.vpn_range.get_start();
 
         // 一页一页地拷贝
@@ -151,19 +151,19 @@ impl MapArea {
             // unsafe { core::slice::from_raw_parts_mut(dst_pa.0 as *mut u8, PAGE_SIZE) };
 
             // 已经实现了接口将ppn转为&mut [u8]，所以不用上面的那个了
-            let dst = page_table
+            let dst = &mut page_table
                 .translate(current_vpn)
                 .unwrap()
                 .ppn()
-                .get_bytes_array();
+                .get_bytes_array()[..src.len()];
 
             dst.copy_from_slice(src);
-            current_vpn.step();
 
             start += PAGE_SIZE;
             if start >= len {
                 break;
             }
+            current_vpn.step();
         }
     }
 }
@@ -218,7 +218,6 @@ impl MemorySet {
             None,
             // Some(unsafe { core::slice::from_raw_parts_mut(stext as usize as *mut u8, etext as usize - stext as usize) }),
         );
-
         println!("mapping .rodata section");
         memory_set.push(
             MapArea::new(
@@ -229,7 +228,6 @@ impl MemorySet {
             ),
             None,
         );
-
         println!("mapping .data section");
         memory_set.push(
             MapArea::new(
@@ -240,7 +238,6 @@ impl MemorySet {
             ),
             None,
         );
-
         println!("mapping .bss section");
         memory_set.push(
             MapArea::new(
@@ -251,7 +248,6 @@ impl MemorySet {
             ),
             None,
         );
-
         println!("mapping left physical memory");
         memory_set.push(
             MapArea::new(
@@ -262,18 +258,17 @@ impl MemorySet {
             ),
             None,
         );
-
+        println!("kernel memory space setup success!");
         memory_set
     }
 
     // 在地址空间中插入一个新的逻辑段map_area，data为可选的初始化数据
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
         map_area.map(&mut self.page_table);
-
+        // println!("MapType: {:?}", map_area.map_type);
         if let Some(data) = data {
             map_area.copy_data(&self.page_table, data);
         }
-
         self.areas.push(map_area);
     }
 
@@ -331,7 +326,6 @@ impl MemorySet {
         let mut memory_set = Self::new_bare();
         // map trampoline
         memory_set.map_trampoline();
-
         // 用xmas-elf库解析elf文件
         let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
         let elf_header = elf.header;
@@ -369,6 +363,7 @@ impl MemorySet {
                     map_perm |= MapPermission::X;
                 }
                 // 创建MapArea
+                // println!("App {}， start_va: {:#x}, end_va: {:#x}", i, start_va.0, end_va.0);
                 let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
                 max_end_vpn = map_area.vpn_range.get_end();
                 memory_set.push(
