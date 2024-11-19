@@ -1,3 +1,5 @@
+use crate::trap::trap_return;
+
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TaskContext {
@@ -19,19 +21,18 @@ impl TaskContext {
         }
     }
 
-    // __restore在trap/trap.S中
     // 在初始化TASK_MANAGER时被调用
     // 传入这个task对应的内核栈指针
-    // 对应原版的go_to_restore
-    pub fn new_setted_trap_ret(kstack_ptr: usize) -> Self {
-        extern "C" {
-            fn __restore();
-        }
-
-        // 在__switch函数的最后一行，会调用汇编指令ret
-        // 然后CPU会跳转到ra寄存器中的地址，也就是__restore函数，并继续往下执行
+    pub fn goto_trap_ret(kstack_ptr: usize) -> Self {
+        // 在__switch函数（先保存完TaskContext的各种寄存器后）的最后一行，会调用汇编指令ret
+        // 然后CPU会跳转到ra寄存器中的地址，也就是trap_return函数
+        // trap_return函数会调用trap.S的__restore函数
+        // __restore函数保存TrapContext的各种寄存器后，调用汇编指令sret
+        // sret会将CPU的特权级从S态切换到U态，然后跳转到TrapContext中的sepc寄存器中的地址
+        // 而spec寄存器在app_init_context函数中被设置为elf文件的入口地址
+        // 所以最终会跳到入口地址开始执行用户程序
         Self {
-            ra: __restore as usize,
+            ra: trap_return as usize,
             sp: kstack_ptr,
             s: [0; 12],
         }

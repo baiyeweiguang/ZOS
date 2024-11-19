@@ -18,25 +18,6 @@ use riscv::register::{
 
 global_asm!(include_str!("trap.S"));
 
-fn set_kernel_trap_entry() {
-    unsafe {
-        // stvec寄存器保存中断处理函数的地址，
-        stvec::write(trap_from_kernel as usize, TrapMode::Direct);
-    }
-}
-
-fn set_user_trap_entry() {
-    // 这里将中断处理函数的地址设置为__alltraps（在trap.S中用汇编实现）
-    // __alltraps负责保存中断上下文到内核栈中，并调用trap_handler进行中断分发
-    unsafe {
-        // 注意！ 在开启分页机制后，内核不能直接通过编译器在链接时看到的__alltraps函数对应的虚拟地址
-        // 但是在trap.S中，__alltraps被放在了.text.trampoline section中，
-        // 而其对应的地址符号strampoline已经被我们固定映射到了TRAMPOLINE_ADDRESS
-        // 所以我们能通过跳板页面来来实际取得__alltraps和下面的__restore的汇编代码
-        stvec::write(TRAMPOLINE_ADDRESS as usize, TrapMode::Direct);
-    }
-}
-
 
 pub fn init() {
     set_kernel_trap_entry();
@@ -92,13 +73,32 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
     cx
 }
 
+fn set_kernel_trap_entry() {
+    unsafe {
+        // stvec寄存器保存中断处理函数的地址，
+        stvec::write(trap_from_kernel as usize, TrapMode::Direct);
+    }
+}
+
+fn set_user_trap_entry() {
+    // 这里将中断处理函数的地址设置为__alltraps（在trap.S中用汇编实现）
+    // __alltraps负责保存中断上下文到内核栈中，并调用trap_handler进行中断分发
+    unsafe {
+        // 注意！ 在开启分页机制后，内核不能直接通过编译器在链接时看到的__alltraps函数对应的虚拟地址
+        // 但是在trap.S中，__alltraps被放在了.text.trampoline section中，
+        // 而其对应的地址符号strampoline已经被我们固定映射到了TRAMPOLINE_ADDRESS
+        // 所以我们能通过跳板页面来来实际取得__alltraps和下面的__restore的汇编代码
+        stvec::write(TRAMPOLINE_ADDRESS as usize, TrapMode::Direct);
+    }
+}
+
 #[no_mangle]
 fn trap_from_kernel() {
     panic!("a trap from kernel");
 }
 
 #[no_mangle]
-pub fn trap_return() {
+pub fn trap_return() -> ! {
     // 让应用在U->S时，可以跳转到__alltraps
     set_user_trap_entry();
     let trap_cx_ptr = TRAP_CONTEXT_ADDRESS;
@@ -122,6 +122,4 @@ pub fn trap_return() {
         );
     }
     panic!("Unreachable in back_to_user!");
-
-
 }

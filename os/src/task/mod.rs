@@ -104,6 +104,8 @@ impl TaskManager {
     }
 
     // 从这里开始，系统从内核态进入用户态
+    // 调用链为run_first_task->__switch->trap_return->__restore->UserCode
+    // 在trap_return函数中，我们设置了stvec为TRAMPOLINE_ADDRESS，相当于设置了中断处理函数的入口地址
     fn run_first_task(&self) -> ! {
         let mut inner = self.inner.exclusive_access();
         let next_task_cx_ptr = &mut inner.tasks[0].task_cx as *mut TaskContext;
