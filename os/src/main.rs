@@ -37,7 +37,7 @@ pub fn rust_main() -> ! {
     println!("trap init...");
     trap::init();
     println!("timer init...");
-    // loader::load_apps();
+    loader::list_apps();
     trap::enable_timer_interrupt();
     timer::set_next_trigger();
     println!("task init...");

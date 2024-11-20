@@ -1,9 +1,8 @@
-use super::TaskContext;
+use alloc::{sync::{Arc, Weak}, vec::Vec};
+
+use super::{pid::{kernel_stack_position, KernelStack, PidHandle}, TaskContext};
 use crate::{
-    config::{kernel_stack_position, TRAP_CONTEXT_ADDRESS},
-    mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE},
-    println,
-    trap::{trap_handler, TrapContext},
+    config::TRAP_CONTEXT_ADDRESS, mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE}, println, sync::UPSafeCell, trap::{trap_handler, TrapContext}
 };
 
 // 通过 #[derive(...)] 可以让编译器为你的类型提供一些 Trait 的默认实现。
@@ -21,15 +20,24 @@ pub enum TaskStatus {
 }
 
 pub struct TaskControlBlock {
-    pub task_status: TaskStatus,
-    pub task_cx: TaskContext,
-    pub memory_set: MemorySet,
+    // immutable
+    pub pid: PidHandle,
+    pub kernel_stack: KernelStack,
+    // mutable
+    // 类似于linux的tss_struct
+    inner: UPSafeCell<TaskControlBlockInner>,
+}
+
+pub struct TaskControlBlockInner {
     pub trap_cx_ppn: PhysPageNum,
-    // 统计应用数据的大小
-    #[allow(dead_code)]
+    #[allow(unused)]
     pub base_size: usize,
-    pub heap_bottom: usize,
-    pub program_brk: usize,
+    pub task_cx: TaskContext,
+    pub task_status: TaskStatus,
+    pub memory_set: MemorySet,
+    pub parent: Option<Weak<TaskControlBlock>>,
+    pub children: Vec<Arc<TaskControlBlock>>,
+    pub exit_code: i32,
 }
 
 impl TaskControlBlock {

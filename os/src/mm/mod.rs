@@ -17,3 +17,11 @@ pub fn init() {
     // 开启分页机制
     KERNEL_SPACE.exclusive_access().activate();
 }
+
+pub fn alloc_kernel_stack(start_va: VirtAddr, end_va: VirtAddr) {
+    KERNEL_SPACE.exclusive_access().insert_framed_area(
+        start_va.into(),
+        end_va.into(),
+        MapPermission::R | MapPermission::W,
+    );
+}

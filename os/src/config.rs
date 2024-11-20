@@ -18,9 +18,3 @@ pub const TRAP_CONTEXT_ADDRESS: usize = TRAMPOLINE_ADDRESS - PAGE_SIZE;
 
 pub use crate::board::{CLOCK_FREQ, MEMORY_END};
 
-/// Return (bottom, top) of a kernel stack of specific app in kernel space.
-pub fn kernel_stack_position(app_id: usize) -> (usize, usize) {
-    let top = TRAMPOLINE_ADDRESS - app_id * (KERNEL_STACK_SIZE + PAGE_SIZE);
-    let bottom = top - KERNEL_STACK_SIZE;
-    (bottom, top)
-}

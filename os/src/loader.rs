@@ -1,5 +1,10 @@
 //! Loading user applications into memory
 
+use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
+use lazy_static::lazy_static;
+use crate::println;
+
 /// Get the total number of applications.
 pub fn get_num_app() -> usize {
     extern "C" {
@@ -24,4 +29,41 @@ pub fn get_app_data(app_id: usize) -> &'static [u8] {
             app_start[app_id + 1] - app_start[app_id],
         )
     }
+}
+
+lazy_static! {
+    static ref APP_NAMES_MAP: BTreeMap<&'static str, usize> = {
+        let num_app = get_num_app();
+        extern "C" {
+            fn _app_names();
+        }
+        let mut start = _app_names as usize as *const u8;
+        let mut map = BTreeMap::new();
+        for i in 0..num_app {
+            let mut end = start;
+            unsafe {
+                while end.read_volatile() != '\0' as u8 {
+                    end = end.add(1);
+                }
+            }
+            let slice =
+                unsafe { core::slice::from_raw_parts(start, end as usize - start as usize) };
+            let str = core::str::from_utf8(slice).unwrap();
+            map.insert(str, i);
+            start = unsafe { end.add(1) };
+        }
+        map
+    };
+}
+
+pub fn get_app_data_by_name(name: &str) -> Option<&'static [u8]> {
+    APP_NAMES_MAP.get(name).map(|&id| get_app_data(id))
+}
+
+pub fn list_apps() {
+    println!("/**** APPS ****");
+    for (name, id) in APP_NAMES_MAP.iter() {
+        println!("Name: {},id: {}", name, id);
+    }
+    println!("**************/");
 }
