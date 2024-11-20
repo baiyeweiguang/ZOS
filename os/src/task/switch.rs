@@ -5,7 +5,7 @@ use super::TaskContext;
 global_asm!(include_str!("switch.S"));
 
 extern "C" {
-    /// Switch to the context of `next_task_cx_ptr`, saving the current context
-    /// in `current_task_cx_ptr`.
+    /// 将当前的处理机上下文保存在current_task_cx_ptr指向的位置
+    /// 并恢复next_task_cx_ptr指向的处理机上下文
     pub fn __switch(current_task_cx_ptr: *mut TaskContext, next_task_cx_ptr: *const TaskContext);
 }

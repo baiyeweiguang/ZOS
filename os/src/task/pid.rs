@@ -71,7 +71,7 @@ pub struct KernelStack {
 }
 
 impl KernelStack {
-    pub fn new(pid_handle: PidHandle) -> Self {
+    pub fn new(pid_handle: &PidHandle) -> Self {
         let pid = pid_handle.0;
         let (kernel_stack_bottom, kernel_stack_top) = kernel_stack_position(pid);
         alloc_kernel_stack(kernel_stack_bottom.into(), kernel_stack_top.into());

@@ -1,8 +1,20 @@
-use alloc::{sync::{Arc, Weak}, vec::Vec};
+use core::cell::RefMut;
 
-use super::{pid::{kernel_stack_position, KernelStack, PidHandle}, TaskContext};
+use alloc::{
+    sync::{Arc, Weak},
+    vec::Vec,
+};
+
+use super::{
+    pid::{pid_alloc, KernelStack, PidHandle},
+    TaskContext,
+};
 use crate::{
-    config::TRAP_CONTEXT_ADDRESS, mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE}, println, sync::UPSafeCell, trap::{trap_handler, TrapContext}
+    config::TRAP_CONTEXT_ADDRESS,
+    mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE},
+    println,
+    sync::UPSafeCell,
+    trap::{trap_handler, TrapContext},
 };
 
 // 通过 #[derive(...)] 可以让编译器为你的类型提供一些 Trait 的默认实现。
@@ -16,6 +28,7 @@ pub enum TaskStatus {
     UnInit,
     Ready,
     Running,
+    Zombie,
     Exited,
 }
 
@@ -40,8 +53,23 @@ pub struct TaskControlBlockInner {
     pub exit_code: i32,
 }
 
+impl TaskControlBlockInner {
+    pub fn get_trap_cx(&self) -> &'static mut TrapContext {
+        self.trap_cx_ppn.get_mut()
+    }
+    pub fn get_user_token(&self) -> usize {
+        self.memory_set.token()
+    }
+    fn get_status(&self) -> TaskStatus {
+        self.task_status
+    }
+    pub fn is_zombie(&self) -> bool {
+        self.get_status() == TaskStatus::Zombie
+    }
+}
+
 impl TaskControlBlock {
-    pub fn new(elf_data: &[u8], app_id: usize) -> Self {
+    pub fn new(elf_data: &[u8]) -> Self {
         // 解析elf文件
         let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
 
@@ -53,29 +81,28 @@ impl TaskControlBlock {
             .unwrap()
             .ppn();
 
-        let task_status = TaskStatus::Ready;
-
-        // 映射当前应用的内核栈
-        let (kernel_stack_bottom, kernel_stack_top) = kernel_stack_position(app_id);
-        KERNEL_SPACE.exclusive_access().insert_framed_area(
-            kernel_stack_bottom.into(),
-            kernel_stack_top.into(),
-            MapPermission::R | MapPermission::W,
-        );
+        let pid_handle = pid_alloc();
+        let kernel_stack = KernelStack::new(&pid_handle);
+        let kernel_stack_top = kernel_stack.get_top();
 
         let task_control_block = Self {
-            task_status,
-            task_cx: TaskContext::goto_trap_ret(kernel_stack_top),
-            memory_set,
-            trap_cx_ppn,
-            base_size: user_sp,
-            heap_bottom: user_sp,
-            program_brk: user_sp,
+            pid: pid_handle,
+            kernel_stack,
+            inner: UPSafeCell::new(TaskControlBlockInner {
+                trap_cx_ppn,
+                base_size: user_sp,
+                task_cx: TaskContext::goto_trap_ret(kernel_stack_top),
+                task_status: TaskStatus::Ready,
+                memory_set,
+                parent: None,
+                children: Vec::new(),
+                exit_code: 0,
+            }),
         };
 
         // 准备TrapContext
         // 这里的trap_cx是已经存在于物理内存上的
-        let trap_cx = task_control_block.get_trap_cx();
+        let trap_cx = task_control_block.inner_exclusive_access().get_trap_cx();
         *trap_cx = TrapContext::app_init_context(
             entry_point,
             user_sp,
@@ -86,42 +113,38 @@ impl TaskControlBlock {
         task_control_block
     }
 
-    pub fn change_program_brk(&mut self, size: i32) -> Option<usize> {
-        let old_brk = self.program_brk;
-        // size可能为负数
-        let new_brk: isize = self.program_brk as isize + size as isize;
+    // pub fn change_program_brk(&mut self, size: i32) -> Option<usize> {
+    //     let old_brk = self.program_brk;
+    //     // size可能为负数
+    //     let new_brk: isize = self.program_brk as isize + size as isize;
 
-        // 小于heap_bottom的话，新的brk会侵犯到stack甚至其他地方的空间，不合法
-        if new_brk < self.heap_bottom as isize {
-            return None;
-        }
+    //     // 小于heap_bottom的话，新的brk会侵犯到stack甚至其他地方的空间，不合法
+    //     if new_brk < self.heap_bottom as isize {
+    //         return None;
+    //     }
 
-        let result = if size < 0 {
-            self.memory_set.shrink_to(
-                VirtAddr::from(self.heap_bottom),
-                VirtAddr::from(new_brk as usize),
-            )
-        } else {
-            // 源码里是from(self.heep_bottom)，有待商榷
-            self.memory_set.append_to(
-                VirtAddr::from(self.program_brk),
-                VirtAddr::from(new_brk as usize),
-            )
-        };
+    //     let result = if size < 0 {
+    //         self.memory_set.shrink_to(
+    //             VirtAddr::from(self.heap_bottom),
+    //             VirtAddr::from(new_brk as usize),
+    //         )
+    //     } else {
+    //         // 源码里是from(self.heep_bottom)，有待商榷
+    //         self.memory_set.append_to(
+    //             VirtAddr::from(self.program_brk),
+    //             VirtAddr::from(new_brk as usize),
+    //         )
+    //     };
 
-        if result {
-            self.program_brk = new_brk as usize;
-            Some(old_brk)
-        } else {
-            None
-        }
-    }
+    //     if result {
+    //         self.program_brk = new_brk as usize;
+    //         Some(old_brk)
+    //     } else {
+    //         None
+    //     }
+    // }
 
-    pub fn get_trap_cx(&self) -> &'static mut TrapContext {
-        self.trap_cx_ppn.get_mut()
-    }
-
-    pub fn get_user_token(&self) -> usize {
-        self.memory_set.token()
+    pub fn inner_exclusive_access(&self) -> RefMut<'_, TaskControlBlockInner> {
+        self.inner.exclusive_access()
     }
 }
