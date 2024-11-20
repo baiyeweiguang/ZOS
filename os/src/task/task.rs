@@ -1,6 +1,9 @@
 use super::TaskContext;
 use crate::{
-    config::{kernel_stack_position, TRAP_CONTEXT_ADDRESS}, mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE}, println, trap::{trap_handler, TrapContext}
+    config::{kernel_stack_position, TRAP_CONTEXT_ADDRESS},
+    mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE},
+    println,
+    trap::{trap_handler, TrapContext},
 };
 
 // 通过 #[derive(...)] 可以让编译器为你的类型提供一些 Trait 的默认实现。
@@ -72,7 +75,6 @@ impl TaskControlBlock {
             kernel_stack_top,
             trap_handler as usize,
         );
-
         task_control_block
     }
 

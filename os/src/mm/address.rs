@@ -65,6 +65,10 @@ impl PhysAddr {
             PhysPageNum((self.0 + PAGE_SIZE - 1) / PAGE_SIZE)
         }
     }
+
+    pub fn aligned(&self) -> bool {
+        self.page_offset() == 0
+    }
 }
 
 impl PhysPageNum {
@@ -72,18 +76,17 @@ impl PhysPageNum {
     // pointed to by the reference lives as long as the running program.
     // But it can still be coerced to a shorter lifetime.
     pub fn get_pte_array(&self) -> &'static mut [PageTableEntry] {
-        let pa: PhysAddr = self.clone().into();
+        let pa: PhysAddr = (*self).into();
         unsafe { core::slice::from_raw_parts_mut(pa.0 as *mut PageTableEntry, 512) }
     }
 
-    // 相当于转成指针，可以直接操作的内存
     pub fn get_bytes_array(&self) -> &'static mut [u8] {
         let pa: PhysAddr = (*self).into();
         unsafe { core::slice::from_raw_parts_mut(pa.0 as *mut u8, PAGE_SIZE) }
     }
 
     pub fn get_mut<T>(&self) -> &'static mut T {
-        let pa: PhysAddr = self.clone().into();
+        let pa: PhysAddr = (*self).into();
         unsafe { (pa.0 as *mut T).as_mut().unwrap() }
     }
 }
@@ -103,6 +106,10 @@ impl VirtAddr {
 
     pub fn page_offset(&self) -> usize {
         self.0 & (PAGE_SIZE - 1)
+    }
+
+    pub fn aligned(&self) -> bool {
+        self.page_offset() == 0
     }
 }
 
@@ -196,7 +203,11 @@ impl From<PhysPageNum> for usize {
 
 impl From<VirtAddr> for usize {
     fn from(v: VirtAddr) -> Self {
-        v.0
+        if v.0 >= (1 << (VA_WIDTH_SV39 - 1)) {
+            v.0 | (!((1 << VA_WIDTH_SV39) - 1))
+        } else {
+            v.0
+        }
     }
 }
 

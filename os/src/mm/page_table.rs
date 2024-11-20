@@ -38,7 +38,7 @@ pub struct PageTableEntry {
 impl PageTableEntry {
     pub fn new(ppn: PhysPageNum, flags: PTEFlags) -> Self {
         Self {
-            bits: (ppn.0 << 10) | flags.bits as usize,
+            bits: ppn.0 << 10 | flags.bits as usize,
         }
     }
 
@@ -54,27 +54,19 @@ impl PageTableEntry {
 
     pub fn flags(&self) -> PTEFlags {
         // from_bits_truncate会自动无视前面的ppn
-        PTEFlags::from_bits_truncate(self.bits as u8)
+        PTEFlags::from_bits(self.bits as u8).unwrap()
     }
 
     pub fn is_valid(&self) -> bool {
         (self.flags() & PTEFlags::V) != PTEFlags::empty()
     }
 
-    pub fn is_dirty(&self) -> bool {
-        (self.flags() & PTEFlags::D) != PTEFlags::empty()
-    }
-
-    pub fn is_accessed(&self) -> bool {
-        (self.flags() & PTEFlags::A) != PTEFlags::empty()
+    pub fn readable(&self) -> bool {
+        (self.flags() & PTEFlags::R) != PTEFlags::empty()
     }
 
     pub fn writable(&self) -> bool {
         (self.flags() & PTEFlags::W) != PTEFlags::empty()
-    }
-
-    pub fn readable(&self) -> bool {
-        (self.flags() & PTEFlags::R) != PTEFlags::empty()
     }
 
     pub fn executable(&self) -> bool {
@@ -116,13 +108,13 @@ impl PageTable {
     }
 
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
-        self.find_pte(vpn).map(|pte| pte.clone())
+        self.find_pte(vpn).map(|pte| *pte)
     }
 
     pub fn token(&self) -> usize {
         // 左边 0b1000 << 60 将satp的MODE字段设置为8 表示启用Sv39模式
         // 右边 将根页表所在物理页号写到satp中
-        0b1000usize << 60 | self.root_table_ppn.0
+        8usize << 60 | self.root_table_ppn.0
     }
 
     /// Temporarily used to get arguments from user space.
@@ -136,77 +128,68 @@ impl PageTable {
 
     // 获取一个虚拟页号对应的物理页号，如果不存在会自动创建
     fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
-        let idx = vpn.indexes();
-
-        let mut table_ppn = self.root_table_ppn;
-        for i in 0..3 {
-            let pte = &mut table_ppn.get_pte_array()[idx[i]];
+        let idxs = vpn.indexes();
+        let mut ppn = self.root_table_ppn;
+        let mut result: Option<&mut PageTableEntry> = None;
+        for (i, idx) in idxs.iter().enumerate() {
+            let pte = &mut ppn.get_pte_array()[*idx];
             if i == 2 {
-                return Some(pte);
+                result = Some(pte);
+                break;
             }
             if !pte.is_valid() {
-                // 为当前的页表，分配一个新的物理页
                 let frame = frame_alloc().unwrap();
                 *pte = PageTableEntry::new(frame.ppn, PTEFlags::V);
                 self.frames.push(frame);
             }
-            table_ppn = pte.ppn();
+            ppn = pte.ppn();
         }
-
-        // 理论上不会执行到这里
-        None
+        result
     }
 
     // 获取一个虚拟页号对应的物理页号，如果不存在则返回None
     fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
-        let idx = vpn.indexes();
-
-        let mut table_ppn = self.root_table_ppn;
-        for i in 0..3 {
-            let pte = &mut table_ppn.get_pte_array()[idx[i]];
+        let idxs = vpn.indexes();
+        let mut ppn = self.root_table_ppn;
+        let mut result: Option<&mut PageTableEntry> = None;
+        for (i, idx) in idxs.iter().enumerate() {
+            let pte = &mut ppn.get_pte_array()[*idx];
+            if i == 2 {
+                result = Some(pte);
+                break;
+            }
             if !pte.is_valid() {
                 return None;
             }
-            if i == 2 {
-                return Some(pte);
-            }
-            table_ppn = pte.ppn();
+            ppn = pte.ppn();
         }
-
-        None
+        result
     }
 }
 
 /// 将一段缓冲区（连续的虚拟地址）翻译成若干个对应的物理页号
 /// 返回时自动转化为可直接访问的若干个[u8]
-pub fn translate_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static [u8]> {
-    let mut v: Vec<&[u8]> = Vec::new();
+pub fn translate_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]> {
     let page_table = PageTable::from_token(token);
-
     let mut start = ptr as usize;
     let end = start + len;
+    let mut v = Vec::new();
     while start < end {
-        // 这里没考虑start是否对齐
         let start_va = VirtAddr::from(start);
         let mut vpn = start_va.floor();
         let ppn = page_table.translate(vpn).unwrap().ppn();
         vpn.step();
-
         let mut end_va: VirtAddr = vpn.into();
-
         end_va = end_va.min(VirtAddr::from(end));
-
         if end_va.page_offset() == 0 {
             // 此时end_va是下一页的起始地址
-            v.push(&ppn.get_bytes_array()[start_va.page_offset()..]);
+            v.push(&mut ppn.get_bytes_array()[start_va.page_offset()..]);
         } else {
             // 此时end_va和start_va在同一页
-            v.push(&ppn.get_bytes_array()[start_va.page_offset()..end_va.page_offset()]);
+            v.push(&mut ppn.get_bytes_array()[start_va.page_offset()..end_va.page_offset()]);
         }
-
         start = end_va.into();
     }
-
     v
 }
 

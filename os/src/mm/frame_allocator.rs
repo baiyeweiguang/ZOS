@@ -26,30 +26,29 @@ impl FrameAllocator for StackFrameAllocator {
 
     fn alloc(&mut self) -> Option<PhysPageNum> {
         if let Some(ppn) = self.recycled.pop() {
-            return Some(PhysPageNum(ppn));
+            return Some(ppn.into());
+        } else if self.current < self.end {
+            self.current += 1;
+            Some((self.current - 1).into())
         } else {
-            if self.current < self.end {
-                let ppn = PhysPageNum(self.current);
-                self.current += 1;
-                Some(ppn)
-            } else {
-                println!(
-                    "[kernel] No enough memory for frame allocation, current: {:#x}, end: {:#x}",
-                    self.current, self.end
-                );
-                None
-            }
+            println!(
+                "[kernel] No enough memory for frame allocation, current: {:#x}, end: {:#x}",
+                self.current, self.end
+            );
+            None
         }
     }
 
     fn dealloc(&mut self, ppn: PhysPageNum) {
         let ppn = ppn.0;
-        // if ppn >= self.current || self.recycled.iter().find(|&x| *x == ppn).is_some() {
-        // panic!("dealloc frame out of range");
-        // }
-        if ppn >= self.current || self.recycled.contains(&ppn) {
-            panic!("dealloc frame out of range, PPN: {}", ppn);
+
+        if ppn >= self.current || self.recycled.iter().any(|&v| v == ppn) {
+            panic!("Frame ppn={:#x} has not been allocated!", ppn);
         }
+
+        // if ppn >= self.current || self.recycled.contains(&ppn) {
+        //     panic!("dealloc frame out of range, PPN: {}", ppn);
+        // }
 
         self.recycled.push(ppn);
     }
@@ -93,7 +92,11 @@ pub struct FrameTracker {
 
 impl FrameTracker {
     pub fn new(ppn: PhysPageNum) -> Self {
-        ppn.get_bytes_array().iter_mut().for_each(|x| *x = 0);
+        // ppn.get_bytes_array().iter_mut().for_each(|x| *x = 0);
+        let bytes_array = ppn.get_bytes_array();
+        for i in bytes_array {
+            *i = 0;
+        }
         FrameTracker { ppn }
     }
 }

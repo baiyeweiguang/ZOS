@@ -8,7 +8,7 @@ use crate::{
 };
 
 use super::{
-    address::{PhysPageNum, VPNRange, VirtAddr, VirtPageNum},
+    address::{PhysAddr, PhysPageNum, VPNRange, VirtAddr, VirtPageNum},
     frame_allocator::{frame_alloc, FrameTracker},
     page_table::{PTEFlags, PageTable, PageTableEntry},
 };
@@ -88,7 +88,7 @@ impl MapArea {
                 self.data_frames.insert(vpn, frame);
                 ppn
             }
-        }; 
+        };
 
         let flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
         page_table.map(vpn, ppn, flags);
@@ -118,7 +118,7 @@ impl MapArea {
         if self.map_type == MapType::Framed {
             self.data_frames.remove(&vpn);
         }
-        page_table.unmap(vpn.0.into());
+        page_table.unmap(vpn);
     }
 
     #[allow(unused)]
@@ -137,28 +137,21 @@ impl MapArea {
         self.vpn_range = VPNRange::new(self.vpn_range.get_start(), new_end);
     }
 
+    /// data: start-aligned but maybe with shorter length
+    /// assume that all frames were cleared before
     pub fn copy_data(&mut self, page_table: &PageTable, data: &[u8]) {
-        let mut len = data.len();
+        assert_eq!(self.map_type, MapType::Framed);
+        let mut start: usize = 0;
         let mut current_vpn = self.vpn_range.get_start();
-
-        // 一页一页地拷贝
-        let mut start = 0;
+        let len = data.len();
         loop {
-            let src = &data[start..min(len, start + PAGE_SIZE)];
-
-            // let dst_pa: PhysAddr = page_table.translate(current_vpn).unwrap().ppn().into();
-            // let dst: &mut [u8] =
-            // unsafe { core::slice::from_raw_parts_mut(dst_pa.0 as *mut u8, PAGE_SIZE) };
-
-            // 已经实现了接口将ppn转为&mut [u8]，所以不用上面的那个了
+            let src = &data[start..len.min(start + PAGE_SIZE)];
             let dst = &mut page_table
                 .translate(current_vpn)
                 .unwrap()
                 .ppn()
                 .get_bytes_array()[..src.len()];
-
             dst.copy_from_slice(src);
-
             start += PAGE_SIZE;
             if start >= len {
                 break;
@@ -286,10 +279,10 @@ impl MemorySet {
 
     fn map_trampoline(&mut self) {
         self.page_table.map(
-            VirtPageNum(TRAMPOLINE_ADDRESS),
-            PhysPageNum(strampoline as usize),
+            VirtAddr::from(TRAMPOLINE_ADDRESS).into(),
+            PhysAddr::from(strampoline as usize).into(),
             PTEFlags::R | PTEFlags::X,
-        )
+        );
     }
 
     #[allow(unused)]

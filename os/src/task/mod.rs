@@ -84,7 +84,7 @@ impl TaskManager {
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
-            let next_task_cx_ptr = &mut inner.tasks[next].task_cx as *mut TaskContext;
+            let next_task_cx_ptr = &mut inner.tasks[next].task_cx as *const TaskContext;
 
             inner.tasks[next].task_status = TaskStatus::Running;
             inner.current_task = next;
@@ -104,16 +104,15 @@ impl TaskManager {
     fn run_first_task(&self) -> ! {
         println!("run_first_task");
         let mut inner = self.inner.exclusive_access();
-        let next_task_cx_ptr = &mut inner.tasks[0].task_cx as *mut TaskContext;
-
-        inner.tasks[0].task_status = TaskStatus::Running;
-        inner.current_task = 0;
+        let next_task = &mut inner.tasks[0];
+        next_task.task_status = TaskStatus::Running;
+        let next_task_cx_ptr = &next_task.task_cx as *const TaskContext;
         drop(inner);
+        let mut _unused = TaskContext::new_empty();
+        // before this, we should drop local variables that must be dropped manually
         unsafe {
-            let mut unused = TaskContext::new_empty();
-            __switch(&mut unused, next_task_cx_ptr);
+            __switch(&mut _unused as *mut _, next_task_cx_ptr);
         }
-
         panic!("unreachable in run_first_task!");
     }
 

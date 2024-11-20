@@ -3,7 +3,7 @@ pub use context::TrapContext;
 use riscv::register::sie;
 
 use crate::config::{TRAMPOLINE_ADDRESS, TRAP_CONTEXT_ADDRESS};
-use crate::task::{current_user_token, suspend_current_and_run_next};
+use crate::task::{current_trap_cx, current_user_token, suspend_current_and_run_next};
 use crate::{task::exit_current_and_run_next, timer::set_next_trigger};
 // use crate::batch::run_next_app;
 use crate::println;
@@ -39,11 +39,12 @@ pub fn enable_timer_interrupt() {
 }
 
 #[no_mangle]
-pub fn trap_handler(cx: &mut TrapContext) -> ! {
-    let scause = scause::read(); // get trap cause
-    let stval = stval::read(); // get extra value
+pub fn trap_handler() -> ! {
+    set_kernel_trap_entry();
+    let cx = current_trap_cx();
+    let scause = scause::read();
+    let stval = stval::read();
     match scause.cause() {
-        // ecall
         Trap::Exception(Exception::UserEnvCall) => {
             cx.sepc += 4;
             cx.x[10] = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize;
@@ -100,7 +101,6 @@ fn trap_from_kernel() {
 
 #[no_mangle]
 pub fn trap_return() -> ! {
-    println!("trap_return");
     // 让应用在U->S时，可以跳转到__alltraps
     set_user_trap_entry();
     let trap_cx_ptr = TRAP_CONTEXT_ADDRESS;
