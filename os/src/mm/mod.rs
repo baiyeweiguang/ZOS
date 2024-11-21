@@ -9,7 +9,7 @@ pub use memory_set::MapPermission;
 pub use memory_set::MemorySet;
 pub use memory_set::KERNEL_SPACE;
 
-pub use page_table::translate_buffer;
+pub use page_table::{translate_buffer, translate_str};
 
 pub fn init() {
     heap_allocator::init_heap();

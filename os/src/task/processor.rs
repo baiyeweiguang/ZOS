@@ -111,3 +111,7 @@ pub fn suspend_current_and_run_next() {
     add_task(current_task.clone());
     schedule(current_task_cx_ptr);
 }
+
+pub fn exit_current_and_run_next() {
+    // todo
+}

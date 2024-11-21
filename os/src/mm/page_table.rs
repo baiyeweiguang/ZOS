@@ -1,5 +1,6 @@
 use core::panic;
 
+use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -8,6 +9,7 @@ use bitflags::*;
 use crate::lang_items::StepByOne;
 use crate::println;
 
+use super::address::PhysAddr;
 use super::address::PhysPageNum;
 use super::address::VirtPageNum;
 use super::address::PPN_WIDTH_SV39;
@@ -111,6 +113,15 @@ impl PageTable {
         self.find_pte(vpn).map(|pte| *pte)
     }
 
+    pub fn translate_va(&self, va: VirtAddr) -> Option<PhysAddr> {
+        self.find_pte(va.clone().floor()).map(|pte| {
+            let aligned_pa = pte.ppn();
+            let offset = va.page_offset();
+            let aligned_pa_usize: usize = aligned_pa.into();
+            (aligned_pa_usize + offset).into()
+        })
+    }
+
     pub fn token(&self) -> usize {
         // 左边 0b1000 << 60 将satp的MODE字段设置为8 表示启用Sv39模式
         // 右边 将根页表所在物理页号写到satp中
@@ -191,6 +202,24 @@ pub fn translate_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'stati
         start = end_va.into();
     }
     v
+}
+
+/// 从内核空间外的某个用户空间获得一个字符串
+pub fn translate_str(token: usize, ptr: *const u8) -> String {
+    let page_table = PageTable::from_token(token);
+
+    let mut str = String::new();
+    let mut va = ptr as usize;
+    loop {
+        // 因为我们的内核是Identical Mapping，所以翻译得到的物理地址就是内核地址空间的地址，可以直接访问
+        let ch: u8 = *page_table.translate_va(va.into()).unwrap().get_mut();
+        if ch == 0 {
+            break;
+        }
+        str.push(ch as char);
+        va += 1;
+    }
+    str
 }
 
 #[allow(unused)]

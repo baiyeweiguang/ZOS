@@ -8,7 +8,7 @@ use crate::{
 };
 
 // RAII的pid表示
-pub struct PidHandle(usize);
+pub struct PidHandle(pub usize);
 
 ///Pid Allocator struct
 pub struct PidAllocator {

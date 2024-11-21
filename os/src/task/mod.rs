@@ -10,7 +10,7 @@ use core::panic;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 pub use context::TaskContext;
-use manager::add_task;
+pub use manager::add_task;
 use switch::__switch;
 // pub use task::TaskStatus;
 
@@ -123,4 +123,7 @@ pub fn add_initproc() {
 //     }
 // }
 
-pub use processor::suspend_current_and_run_next;
+pub use processor::{
+    current_task, current_trap_cx, current_user_token, exit_current_and_run_next,
+    suspend_current_and_run_next,
+};

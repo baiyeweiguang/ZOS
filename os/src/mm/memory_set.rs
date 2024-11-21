@@ -159,6 +159,16 @@ impl MapArea {
             current_vpn.step();
         }
     }
+
+    /// 从另一个MapArea构造新的MapArea，注意这个不会复制数据
+    pub fn from_another(another: &MapArea) -> Self {
+        Self {
+            vpn_range: VPNRange::new(another.vpn_range.get_start(), another.vpn_range.get_end()),
+            data_frames: BTreeMap::new(),
+            map_type: another.map_type,
+            map_perm: another.map_perm,
+        }
+    }
 }
 
 // 每个进程持有一个
@@ -179,6 +189,7 @@ impl MemorySet {
         self.page_table.token()
     }
 
+    // 启用地址空间
     pub fn activate(&self) {
         let satp = self.token();
         unsafe {
@@ -186,6 +197,36 @@ impl MemorySet {
             // sfence.vma指令用于刷新TLB
             asm!("sfence.vma");
         }
+    }
+
+    pub fn from_existed_user(user_space: &MemorySet) -> Self {
+        let mut new_memory_set = Self::new_bare();
+        new_memory_set.map_trampoline();
+
+        // copy data sections/trap_context/user_stack
+        for area in user_space.areas.iter() {
+            // 这里的new_area还没有实际映射到物理页帧
+            let new_area = MapArea::from_another(&area);
+
+            // push的时候会进行映射
+            new_memory_set.push(new_area, None);
+
+            
+            // 因为两个area的vpn_range是相同的，
+            // 所以在虚拟地址空间上看，两者是一样的
+            // 但是内部映射到的物理页帧是不一样的
+            for vpn in area.vpn_range {
+                let src_ppn = user_space.translate(vpn).unwrap().ppn();
+                let dst_ppn = new_memory_set.translate(vpn).unwrap().ppn();
+
+                // 因为已经映射到了物理页帧，所以这里可以直接copy
+                dst_ppn
+                    .get_bytes_array()
+                    .copy_from_slice(src_ppn.get_bytes_array());
+            }
+        }
+
+        new_memory_set
     }
 
     // 创建内核的地址空间
@@ -314,6 +355,7 @@ impl MemorySet {
 
     /// Include sections in elf and trampoline and TrapContext and user stack,
     /// also returns user_sp and entry point.
+    /// 返回(memory_set, user_sp, entry_point)
     // 从elf文件中加载用户程序，创建其地址空间
     pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize) {
         let mut memory_set = Self::new_bare();

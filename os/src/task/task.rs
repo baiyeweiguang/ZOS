@@ -113,6 +113,74 @@ impl TaskControlBlock {
         task_control_block
     }
 
+    pub fn fork(self: &Arc<Self>) -> Arc<Self> {
+        let mut parent_inner = self.inner_exclusive_access();
+
+        // 创建新进程
+        let new_memory_set = MemorySet::from_existed_user(&parent_inner.memory_set);
+        // 在MemorySet::from_existed_user()中已经将父进程的数据复制了一份，
+        // 所以这里的new_trap_cx_ppn是已经复制了父进程的了，跟new()中的空数据不一样
+        let new_trap_cx_ppn = new_memory_set
+            .translate(VirtAddr::from(TRAP_CONTEXT_ADDRESS).into())
+            .unwrap()
+            .ppn();
+        let new_pid_handle = pid_alloc();
+        let new_kernel_stack = KernelStack::new(&new_pid_handle);
+        let new_kernel_stack_top = new_kernel_stack.get_top();
+
+        let new_task_control_block = Arc::new(TaskControlBlock {
+            pid: new_pid_handle,
+            kernel_stack: new_kernel_stack,
+            inner: UPSafeCell::new(TaskControlBlockInner {
+                trap_cx_ppn: new_trap_cx_ppn,
+                base_size: parent_inner.base_size, // 继承父进程的base_size
+                task_cx: TaskContext::goto_trap_ret(new_kernel_stack_top),
+                task_status: TaskStatus::Ready,
+                memory_set: new_memory_set,
+                parent: Some(Arc::downgrade(self)),
+                children: Vec::new(),
+                exit_code: 0,
+            }),
+        });
+        // 添加child
+        parent_inner.children.push(new_task_control_block.clone());
+
+        let trap_cx = new_task_control_block
+            .inner_exclusive_access()
+            .get_trap_cx();
+        // 其他字段与父进程保持一致
+        trap_cx.kernel_sp = new_kernel_stack_top;
+
+        new_task_control_block
+    }
+
+    /// 加载elf文件，替换掉当前进程的代码和数据，并开始执行
+    pub fn exec(&self, elf_data: &[u8]) {
+        let (new_memory_set, new_user_sp, new_entry_point) = MemorySet::from_elf(elf_data);
+
+        let new_trap_cx_ppn = new_memory_set
+            .translate(VirtAddr::from(TRAP_CONTEXT_ADDRESS).into())
+            .unwrap()
+            .ppn();
+
+        let mut inner = self.inner_exclusive_access();
+        inner.memory_set = new_memory_set;
+        inner.trap_cx_ppn = new_trap_cx_ppn;
+
+        // 因为内核栈至于pid有关，而程序的pid没有改变，所以可以直接用原来的内核栈
+
+        // 因为当前程序还在执行中，不涉及到上下文切换
+        // 所以task_cx、task_status都不需要动
+        let new_trap_cx = inner.get_trap_cx();
+        *new_trap_cx = TrapContext::app_init_context(
+            new_entry_point,
+            new_user_sp,
+            KERNEL_SPACE.exclusive_access().token(),
+            self.kernel_stack.get_top(),
+            trap_handler as usize,
+        )
+    }
+
     // pub fn change_program_brk(&mut self, size: i32) -> Option<usize> {
     //     let old_brk = self.program_brk;
     //     // size可能为负数
