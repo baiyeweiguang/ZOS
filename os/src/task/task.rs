@@ -215,4 +215,8 @@ impl TaskControlBlock {
     pub fn inner_exclusive_access(&self) -> RefMut<'_, TaskControlBlockInner> {
         self.inner.exclusive_access()
     }
+    
+    pub fn getpid(&self) -> usize {
+        self.pid.0
+    }
 }

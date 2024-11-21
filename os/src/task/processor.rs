@@ -6,7 +6,7 @@ use super::{
     manager::{add_task, fetch_task},
     switch::__switch,
     task::{TaskControlBlock, TaskStatus},
-    TaskContext,
+    TaskContext, INITPROC,
 };
 
 pub struct Processor {
@@ -112,6 +112,30 @@ pub fn suspend_current_and_run_next() {
     schedule(current_task_cx_ptr);
 }
 
-pub fn exit_current_and_run_next() {
-    // todo
+pub fn exit_current_and_run_next(exit_code: i32) {
+    // 注意这里是take
+    let task = take_current_task().unwrap();
+    let mut inner = task.inner_exclusive_access();
+    inner.task_status = TaskStatus::Zombie;
+    inner.exit_code = exit_code;
+
+    // 把当前进程的子进程都设置为initproc的子进程
+    {
+        let mut initproc_inner = INITPROC.inner_exclusive_access();
+        for child in inner.children.iter() {
+            child.inner_exclusive_access().parent = Some(Arc::downgrade(&INITPROC));
+            initproc_inner.children.push(child.clone());
+        }
+    }
+
+    // 释放资源
+    inner.children.clear();
+    inner.memory_set.recycle_data_pages();
+
+    // 要调用schedule了，所以要手动drop这些智能指针
+    drop(inner);
+    drop(task);
+
+    let mut _unused = TaskContext::new_empty();
+    schedule(&mut _unused as *mut _);
 }

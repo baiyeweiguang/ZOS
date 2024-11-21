@@ -222,6 +222,14 @@ pub fn translate_str(token: usize, ptr: *const u8) -> String {
     str
 }
 
+pub fn translate_ref_mut<T>(token: usize, ptr: *mut T) -> &'static mut T {
+    let page_table = PageTable::from_token(token);
+    page_table
+        .translate_va((ptr as usize).into())
+        .unwrap()
+        .get_mut()
+}
+
 #[allow(unused)]
 pub fn find_pte_test() {
     let mut page_table = PageTable::new();

@@ -211,7 +211,6 @@ impl MemorySet {
             // push的时候会进行映射
             new_memory_set.push(new_area, None);
 
-            
             // 因为两个area的vpn_range是相同的，
             // 所以在虚拟地址空间上看，两者是一样的
             // 但是内部映射到的物理页帧是不一样的
@@ -227,6 +226,14 @@ impl MemorySet {
         }
 
         new_memory_set
+    }
+
+    /// 释放用户空间的内存
+    pub fn recycle_data_pages(&mut self) {
+        // 逻辑上的释放，其实并没有擦除物理内存
+        // clear后，这个地址空间就无效了，因为page_table没了
+        // 但是物理页帧还在，他们会由父进程最后回收
+        self.areas.clear();
     }
 
     // 创建内核的地址空间

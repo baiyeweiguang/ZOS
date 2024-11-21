@@ -49,3 +49,46 @@ pub fn get_time() -> isize {
 pub fn sbrk(size: i32) -> isize {
     sys_sbrk(size)
 }
+
+pub fn getpid() -> isize {
+    sys_getpid()
+}
+pub fn fork() -> isize {
+    sys_fork()
+}
+pub fn exec(path: &str) -> isize {
+    sys_exec(path)
+}
+
+/// 等待任意子进程退出，返回子进程的pid，-1表示没有子进程
+pub fn wait(exit_code: &mut i32) -> isize {
+    loop {
+        match sys_waitpid(-1, exit_code as *mut _) {
+            -2 => {
+                yield_();
+            }
+            // -1 or a real pid
+            exit_pid => return exit_pid,
+        }
+    }
+}
+
+/// 等待子进程pid退出，返回子进程的pid，-1表示没有子进程
+pub fn waitpid(pid: usize, exit_code: &mut i32) -> isize {
+    loop {
+        match sys_waitpid(pid as isize, exit_code as *mut _) {
+            -2 => {
+                yield_();
+            }
+            // -1 or a real pid
+            exit_pid => return exit_pid,
+        }
+    }
+}
+
+pub fn sleep(period_ms: usize) {
+    let start = sys_get_time();
+    while sys_get_time() < start + period_ms as isize {
+        sys_yield();
+    }
+}
