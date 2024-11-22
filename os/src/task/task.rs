@@ -157,7 +157,6 @@ impl TaskControlBlock {
     /// 加载elf文件，替换掉当前进程的代码和数据，并开始执行
     pub fn exec(&self, elf_data: &[u8]) {
         let (new_memory_set, new_user_sp, new_entry_point) = MemorySet::from_elf(elf_data);
-
         let new_trap_cx_ppn = new_memory_set
             .translate(VirtAddr::from(TRAP_CONTEXT_ADDRESS).into())
             .unwrap()

@@ -3,6 +3,7 @@ use core::fmt::{Debug, Formatter};
 use crate::{
     config::{PAGE_SIZE, PAGE_SIZE_BITS},
     lang_items::{SimpleRange, StepByOne},
+    println,
 };
 
 use super::page_table::PageTableEntry;
@@ -71,7 +72,11 @@ impl PhysAddr {
     }
 
     pub fn get_mut<T>(&self) -> &'static mut T {
-        unsafe { (self.0 as *mut T).as_mut().unwrap() }
+        // let val: usize = unsafe { *(self.0 as *const usize) };
+        // println!("val: {:#x}", val);
+        unsafe {
+            (self.0 as *mut T).as_mut().unwrap()
+        }
     }
 }
 
@@ -222,6 +227,12 @@ impl From<VirtAddr> for usize {
 impl Debug for PhysPageNum {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         f.write_fmt(format_args!("PhysPageNum({:#x})", self.0))
+    }
+}
+
+impl Debug for VirtAddr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.write_fmt(format_args!("VirtAddr({:#x})", self.0))
     }
 }
 

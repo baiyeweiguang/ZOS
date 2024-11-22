@@ -32,16 +32,21 @@ global_asm!(include_str!("link_app.S"));
 pub fn rust_main() -> ! {
     println!("clear bss...");
     clear_bss();
+
     println!("mm init...");
     mm::init();
+    task::add_initproc();
+
     println!("trap init...");
     trap::init();
+
     println!("timer init...");
-    loader::list_apps();
     trap::enable_timer_interrupt();
     timer::set_next_trigger();
-    println!("task init...");
-    task::run_first_task();
+
+    loader::list_apps();
+    task::run_tasks();
+
     panic!("Unreachable in rust_main");
 }
 

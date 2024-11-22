@@ -38,7 +38,7 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
             );
             let mut c: usize = 0;
             loop {
-                let c = console_getchar();
+                c = console_getchar();
                 if c == 0 {
                     suspend_current_and_run_next();
                     continue;

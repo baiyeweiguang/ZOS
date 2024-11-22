@@ -101,7 +101,9 @@ fn set_user_trap_entry() {
 
 #[no_mangle]
 fn trap_from_kernel() {
-    panic!("a trap from kernel");
+    let scause = scause::read();
+    let stval = stval::read();
+    panic!("a trap from kernel! scause: {:?}, stval: {:#x}", scause.cause(), stval);
 }
 
 #[no_mangle]

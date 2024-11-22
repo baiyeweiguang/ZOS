@@ -3,7 +3,8 @@ use lazy_static::lazy_static;
 
 use crate::{
     config::{KERNEL_STACK_SIZE, PAGE_SIZE, TRAMPOLINE_ADDRESS},
-    mm::alloc_kernel_stack,
+    mm::{MapPermission, VirtAddr, KERNEL_SPACE},
+    println,
     sync::UPSafeCell,
 };
 
@@ -51,8 +52,7 @@ impl PidAllocator {
 }
 
 lazy_static! {
-    pub static ref PID_ALLOCATOR: UPSafeCell<PidAllocator> =
-        { UPSafeCell::new(PidAllocator::new()) };
+    pub static ref PID_ALLOCATOR: UPSafeCell<PidAllocator> = UPSafeCell::new(PidAllocator::new());
 }
 
 pub fn pid_alloc() -> PidHandle {
@@ -66,6 +66,8 @@ pub fn kernel_stack_position(app_id: usize) -> (usize, usize) {
     (bottom, top)
 }
 
+// KernelStack是RAII实现的
+// KernelStack对于一个程序来说，就是memory_set的一个area
 pub struct KernelStack {
     pid: usize,
 }
@@ -74,10 +76,15 @@ impl KernelStack {
     pub fn new(pid_handle: &PidHandle) -> Self {
         let pid = pid_handle.0;
         let (kernel_stack_bottom, kernel_stack_top) = kernel_stack_position(pid);
-        alloc_kernel_stack(kernel_stack_bottom.into(), kernel_stack_top.into());
+        KERNEL_SPACE.exclusive_access().insert_framed_area(
+            kernel_stack_bottom.into(),
+            kernel_stack_top.into(),
+            MapPermission::R | MapPermission::W,
+        );
         Self { pid }
     }
 
+    #[allow(unused)]
     pub fn push_on_top<T>(&self, value: T) -> *mut T
     where
         // Sized: 在编译期就能确定大小的类型
@@ -94,5 +101,15 @@ impl KernelStack {
     pub fn get_top(&self) -> usize {
         let (_, kernel_stack_top) = kernel_stack_position(self.pid);
         kernel_stack_top
+    }
+}
+
+impl Drop for KernelStack {
+    fn drop(&mut self) {
+        let (kernel_stack_bottom, _) = kernel_stack_position(self.pid);
+        let kernel_stack_bottom_va: VirtAddr = kernel_stack_bottom.into();
+        KERNEL_SPACE
+            .exclusive_access()
+            .remove_area_with_start_vpn(kernel_stack_bottom_va.into());
     }
 }

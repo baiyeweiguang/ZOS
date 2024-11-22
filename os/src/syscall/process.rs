@@ -46,6 +46,7 @@ pub fn sys_exec(path: *const u8) -> isize {
     let path = translate_str(token, path);
 
     if let Some(data) = get_app_data_by_name(path.as_str()) {
+        // println!("try to exec {:?}", path);
         let task = current_task().unwrap();
         task.exec(data);
         0
@@ -64,8 +65,8 @@ pub fn sys_getpid() -> isize {
 /// 如果存在pid为ipid的子进程，但其不是僵尸进程（还在运行），则返回-2
 pub fn sys_waitpid(ipid: isize, exit_code_ptr: *mut i32) -> isize {
     let task = current_task().unwrap();
-    let mut inner = task.inner_exclusive_access();
 
+    let mut inner = task.inner_exclusive_access();
     // 寻找是否有对应pid的子进程
     if !inner
         .children
@@ -79,17 +80,18 @@ pub fn sys_waitpid(ipid: isize, exit_code_ptr: *mut i32) -> isize {
     let pair = inner.children.iter().enumerate().find(|(_, p)| {
         p.inner_exclusive_access().is_zombie() && (ipid == -1 || ipid as usize == p.getpid())
     });
-
     if let Some((idx, _)) = pair {
         let child = inner.children.remove(idx);
         // 确保离开此函数后child会被释放
         assert_eq!(Arc::strong_count(&child), 1);
 
-        let found_pid = child.pid.0 as isize;
+        let found_pid = child.getpid();
         let exit_code = child.inner_exclusive_access().exit_code;
-        *translate_ref_mut(current_user_token(), exit_code_ptr) = exit_code;
+        // 注意！这里传入的token不能用current_user_token()函数来获得 -> de了半个小时bug的血泪
+        // 因为上面我们已经borrow了inner，而current_user_token()会再次borrow，造成borrow twice崩溃
+        *translate_ref_mut(inner.get_user_token(), exit_code_ptr) = exit_code;
 
-        found_pid
+        found_pid as isize
     } else {
         -2
     }

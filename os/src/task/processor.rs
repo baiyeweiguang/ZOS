@@ -1,4 +1,4 @@
-use crate::{sync::UPSafeCell, trap::TrapContext};
+use crate::{println, sbi::shutdown, sync::UPSafeCell, trap::TrapContext};
 use alloc::sync::Arc;
 use lazy_static::lazy_static;
 
@@ -31,7 +31,7 @@ impl Processor {
 
     /// 返回当前任务的一份拷贝
     pub fn current(&self) -> Option<Arc<TaskControlBlock>> {
-        self.current.as_ref().map(|t| Arc::clone(t))
+        self.current.as_ref().map(Arc::clone)
     }
 
     pub fn get_idle_task_cx_ptr(&mut self) -> *mut TaskContext {
@@ -92,6 +92,7 @@ pub fn run_tasks() {
             drop(next_task_inner);
             processor.current = Some(next_task);
 
+            drop(processor);
             unsafe { __switch(idle_task_cx_ptr, next_task_cx_ptr) };
         }
     }
@@ -112,9 +113,27 @@ pub fn suspend_current_and_run_next() {
     schedule(current_task_cx_ptr);
 }
 
+/// pid of usertests app in make run TEST=1
+pub const IDLE_PID: usize = 0;
+
 pub fn exit_current_and_run_next(exit_code: i32) {
     // 注意这里是take
     let task = take_current_task().unwrap();
+    let pid = task.getpid();
+    if pid == IDLE_PID {
+        println!(
+            "[kernel] Idle process exit with exit_code {} ...",
+            exit_code
+        );
+        if exit_code != 0 {
+            //crate::sbi::shutdown(255); //255 == -1 for err hint
+            shutdown(true)
+        } else {
+            //crate::sbi::shutdown(0); //0 for success hint
+            shutdown(false)
+        }
+    } 
+
     let mut inner = task.inner_exclusive_access();
     inner.task_status = TaskStatus::Zombie;
     inner.exit_code = exit_code;

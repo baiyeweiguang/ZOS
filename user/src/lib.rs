@@ -1,20 +1,27 @@
 #![no_std]
 // 让#[linkage = "weak"]生效
 #![feature(linkage)]
+#![feature(alloc_error_handler)]
 
 // 引入模块
 #[macro_use]
 pub mod console;
+mod heap;
 mod lang_items;
 mod syscall;
+
+use heap::{HEAP, HEAP_SPACE, USER_HEAP_SIZE};
 
 #[no_mangle]
 // 将_start函数放到.text.entry段中
 // 系统加载后会跳到0x10000执行_start函数
 #[link_section = ".text.entry"]
 pub extern "C" fn _start() -> ! {
+    unsafe {
+        HEAP.lock()
+            .init(HEAP_SPACE.as_ptr() as usize, USER_HEAP_SIZE);
+    }
     exit(main());
-    panic!("unreachable after sys_exit!");
 }
 
 // #[linkage = "weak"]表示这个main函数为弱符号，即如果有其他同名函数，那么这个函数会被覆盖。这样保证执行的main函数是用户程序的main函数。
@@ -31,7 +38,7 @@ pub fn write(fd: usize, buffer: &[u8]) -> isize {
     sys_write(fd, buffer)
 }
 
-pub fn exit(code: i32) -> isize {
+pub fn exit(code: i32) -> ! {
     sys_exit(code)
 }
 
@@ -58,6 +65,10 @@ pub fn fork() -> isize {
 }
 pub fn exec(path: &str) -> isize {
     sys_exec(path)
+}
+
+pub fn read(fd: usize, buf: &mut [u8]) -> isize {
+    sys_read(fd, buf)
 }
 
 /// 等待任意子进程退出，返回子进程的pid，-1表示没有子进程

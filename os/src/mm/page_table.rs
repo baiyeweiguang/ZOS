@@ -115,7 +115,9 @@ impl PageTable {
 
     pub fn translate_va(&self, va: VirtAddr) -> Option<PhysAddr> {
         self.find_pte(va.clone().floor()).map(|pte| {
-            let aligned_pa = pte.ppn();
+            //println!("translate_va:va = {:?}", va);
+            let aligned_pa: PhysAddr = pte.ppn().into();
+            //println!("translate_va:pa_align = {:?}", aligned_pa);
             let offset = va.page_offset();
             let aligned_pa_usize: usize = aligned_pa.into();
             (aligned_pa_usize + offset).into()
@@ -212,7 +214,11 @@ pub fn translate_str(token: usize, ptr: *const u8) -> String {
     let mut va = ptr as usize;
     loop {
         // 因为我们的内核是Identical Mapping，所以翻译得到的物理地址就是内核地址空间的地址，可以直接访问
-        let ch: u8 = *page_table.translate_va(va.into()).unwrap().get_mut();
+        let ch: u8 = *(page_table
+            .translate_va(VirtAddr::from(va))
+            .unwrap()
+            .get_mut());
+        // println!("sasd");
         if ch == 0 {
             break;
         }
@@ -222,6 +228,7 @@ pub fn translate_str(token: usize, ptr: *const u8) -> String {
     str
 }
 
+/// 把用户地址空间的指针转成内核可操作的引用
 pub fn translate_ref_mut<T>(token: usize, ptr: *mut T) -> &'static mut T {
     let page_table = PageTable::from_token(token);
     page_table
