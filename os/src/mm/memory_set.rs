@@ -425,34 +425,10 @@ impl MemorySet {
         // 在这个版本中，似乎每个程序是没有堆的，所有程序共用内核.bss段的空间作为堆
         user_stack_bottom += PAGE_SIZE;
 
-        // 用户栈的顶部地址
-        let user_stack_top = user_stack_bottom + USER_STACK_SIZE;
-        // 创建用户栈的MapArea
-        memory_set.push(
-            MapArea::new(
-                user_stack_bottom.into(),
-                user_stack_top.into(),
-                MapType::Framed,
-                MapPermission::R | MapPermission::W | MapPermission::U,
-            ),
-            None,
-        );
-
-        // 创建TrapContext的MapArea
-        memory_set.push(
-            MapArea::new(
-                TRAP_CONTEXT_ADDRESS.into(),
-                TRAMPOLINE_ADDRESS.into(),
-                MapType::Framed,
-                MapPermission::R | MapPermission::W,
-            ),
-            None,
-        );
-
-        // 返回MemorySet，用户栈的顶部地址，程序入口地址
+        // 返回MemorySet，用户栈基地址，程序入口地址
         (
             memory_set,
-            user_stack_top,
+            user_stack_bottom,
             elf.header.pt2.entry_point() as usize,
         )
     }

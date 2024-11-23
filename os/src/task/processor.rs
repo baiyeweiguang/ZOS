@@ -4,6 +4,7 @@ use lazy_static::lazy_static;
 
 use super::{
     manager::{add_task, fetch_task},
+    process::ProcessControlBlock,
     switch::__switch,
     task::{TaskControlBlock, TaskStatus},
     TaskContext, INITPROC,
@@ -52,6 +53,11 @@ pub fn current_task() -> Option<Arc<TaskControlBlock>> {
     PROCESSOR.exclusive_access().current()
 }
 
+// TODO
+pub fn current_process() -> Option<Arc<ProcessControlBlock>> {
+    None
+}
+
 pub fn current_user_token() -> usize {
     let task = current_task().expect("no current task");
     let token = task.inner_exclusive_access().get_user_token();
@@ -63,6 +69,16 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
         .unwrap()
         .inner_exclusive_access()
         .get_trap_cx()
+}
+
+// TODO
+pub fn current_trap_cx_user_va() -> usize {
+    0
+}
+
+// TODO
+pub fn current_kernel_stack_top() -> usize {
+    0
 }
 
 // 当一个进程耗尽了时间片后，内核会调用这个函数将当前处理器切换到idle进程上
@@ -132,7 +148,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
             //crate::sbi::shutdown(0); //0 for success hint
             shutdown(false)
         }
-    } 
+    }
 
     let mut inner = task.inner_exclusive_access();
     inner.task_status = TaskStatus::Zombie;

@@ -11,6 +11,7 @@ const SYSCALL_WAITPID: usize = 260;
 
 mod fs;
 mod process;
+mod thread;
 
 use fs::*;
 use process::{sys_exec, sys_exit, sys_fork, sys_get_time, sys_getpid, sys_waitpid, sys_yield};

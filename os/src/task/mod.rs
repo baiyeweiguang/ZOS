@@ -1,6 +1,7 @@
 mod context;
+mod id;
 mod manager;
-mod pid;
+mod process;
 mod processor;
 mod switch;
 mod task;
@@ -8,6 +9,7 @@ mod task;
 use alloc::sync::Arc;
 pub use context::TaskContext;
 pub use manager::add_task;
+use process::ProcessControlBlock;
 // pub use task::TaskStatus;
 
 use crate::loader::get_app_data_by_name;
@@ -16,9 +18,8 @@ use task::TaskControlBlock;
 
 // 初始进程
 lazy_static! {
-    pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new(TaskControlBlock::new(
-        get_app_data_by_name("initproc").unwrap()
-    ));
+    pub static ref INITPROC: Arc<ProcessControlBlock> =
+        ProcessControlBlock::new(get_app_data_by_name("initproc").unwrap());
 }
 
 pub fn add_initproc() {
