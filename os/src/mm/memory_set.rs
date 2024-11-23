@@ -457,6 +457,10 @@ lazy_static! {
         Arc::new(UPSafeCell::new(MemorySet::new_kernel()));
 }
 
+pub fn kernel_token() -> usize {
+    KERNEL_SPACE.exclusive_access().token()
+}
+
 // 一个简单的检查程序
 #[allow(unused)]
 pub fn remap_test() {

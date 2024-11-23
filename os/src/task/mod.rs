@@ -14,7 +14,7 @@ use process::ProcessControlBlock;
 
 use crate::loader::get_app_data_by_name;
 use lazy_static::*;
-use task::TaskControlBlock;
+pub use task::TaskControlBlock;
 
 // 初始进程
 lazy_static! {
@@ -23,7 +23,7 @@ lazy_static! {
 }
 
 pub fn add_initproc() {
-    add_task(INITPROC.clone());
+    add_task(INITPROC.inner_exclusive_access().get_task(0));
 }
 
 pub use processor::{
