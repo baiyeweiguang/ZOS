@@ -9,6 +9,7 @@ use alloc::{
 use crate::{
     config::TRAP_CONTEXT_ADDRESS,
     mm::{translate_ref_mut, MemorySet, VirtAddr, KERNEL_SPACE},
+    print, println,
     sync::UPSafeCell,
     task::add_task,
     trap::{trap_handler, TrapContext},
@@ -29,7 +30,7 @@ pub struct ProcessControlBlockInner {
     pub is_zombie: bool,
     pub memory_set: MemorySet,
     pub parent: Option<Weak<ProcessControlBlock>>,
-    pub children: Vec<Weak<ProcessControlBlock>>,
+    pub children: Vec<Arc<ProcessControlBlock>>,
     pub exit_code: i32,
     pub tasks: Vec<Option<Arc<TaskControlBlock>>>,
     pub task_res_allocator: RecycleAllocator,
@@ -62,12 +63,12 @@ impl ProcessControlBlock {
         // 解析elf文件
         let (memory_set, ustack_base, entry_point) = MemorySet::from_elf(elf_data);
 
-        // println!("current app id: {}, memory usage: {}KB", app_id, user_sp / 1024);
+        // println!("try to new pcb");
         // 分配pid
         let pid_handle = pid_alloc();
 
         // 创建进程控制块
-        let process = Arc::new(ProcessControlBlock {
+        let process = Arc::new(Self {
             pid: pid_handle,
             inner: UPSafeCell::new(ProcessControlBlockInner {
                 is_zombie: false,
@@ -95,7 +96,7 @@ impl ProcessControlBlock {
         drop(task_inner);
         *trap_cx = TrapContext::app_init_context(
             entry_point,
-            ustack_base,
+            ustack_top,
             KERNEL_SPACE.exclusive_access().token(),
             kstack_top,
             trap_handler as usize,
@@ -107,6 +108,7 @@ impl ProcessControlBlock {
         drop(process_inner);
         insert_into_pid2process(process.getpid(), Arc::clone(&process));
 
+        add_task(main_task);
         process
     }
 
@@ -135,7 +137,7 @@ impl ProcessControlBlock {
             },
         });
 
-        parent_inner.children.push(Arc::downgrade(&child));
+        parent_inner.children.push(Arc::clone(&child));
 
         let ustack_base = parent_inner
             .get_task(0)
@@ -185,6 +187,7 @@ impl ProcessControlBlock {
         let mut task_inner = task.inner_exclusive_access();
         task_inner.res.as_mut().unwrap().ustack_base = ustack_base;
         task_inner.res.as_mut().unwrap().alloc_user_res();
+        task_inner.trap_cx_ppn = task_inner.res.as_mut().unwrap().trap_cx_ppn();
 
         // 将参数压入栈中
         // 假如有2个参数
@@ -234,5 +237,9 @@ impl ProcessControlBlock {
 
     pub fn getpid(&self) -> usize {
         self.pid.0
+    }
+
+    pub fn is_zombie(&self) -> bool {
+        self.inner_exclusive_access().is_zombie
     }
 }

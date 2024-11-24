@@ -26,11 +26,9 @@ use crate::{
 #[derive(Copy, Clone, PartialEq)]
 pub enum TaskStatus {
     #[allow(dead_code)]
-    UnInit,
     Ready,
     Running,
-    Zombie,
-    Exited,
+    Blocked,
 }
 
 pub struct TaskControlBlock {
@@ -92,6 +90,10 @@ impl TaskControlBlock {
         let process = self.process.upgrade().unwrap();
         process.pid.0
     }
+
+    pub fn gettid(&self) -> usize {
+        self.inner_exclusive_access().res.as_ref().unwrap().tid
+    }
 }
 
 // pub struct TaskControlBlockInner {
@@ -120,34 +122,6 @@ impl TaskControlBlock {
 //         self.get_status() == TaskStatus::Zombie
 //     }
 // }
-
-// impl TaskControlBlock {
-
-//     /// 加载elf文件，替换掉当前进程的代码和数据，并开始执行
-//     pub fn exec(&self, elf_data: &[u8]) {
-//         let (new_memory_set, new_user_sp, new_entry_point) = MemorySet::from_elf(elf_data);
-//         let new_trap_cx_ppn = new_memory_set
-//             .translate(VirtAddr::from(TRAP_CONTEXT_ADDRESS).into())
-//             .unwrap()
-//             .ppn();
-
-//         let mut inner = self.inner_exclusive_access();
-//         inner.memory_set = new_memory_set;
-//         inner.trap_cx_ppn = new_trap_cx_ppn;
-
-//         // 因为内核栈至于pid有关，而程序的pid没有改变，所以可以直接用原来的内核栈
-
-//         // 因为当前程序还在执行中，不涉及到上下文切换
-//         // 所以task_cx、task_status都不需要动
-//         let new_trap_cx = inner.get_trap_cx();
-//         *new_trap_cx = TrapContext::app_init_context(
-//             new_entry_point,
-//             new_user_sp,
-//             KERNEL_SPACE.exclusive_access().token(),
-//             self.kernel_stack.get_top(),
-//             trap_handler as usize,
-//         )
-//     }
 
 // pub fn change_program_brk(&mut self, size: i32) -> Option<usize> {
 //     let old_brk = self.program_brk;

@@ -9,9 +9,11 @@ extern crate user_lib;
 #[no_mangle]
 pub fn main() -> i32 {
     println!("INITPROC");
+
     if fork() == 0 {
-      // exit(0);
-      exec("user_shell\0");
+        //   exit(0);
+        // println!("Start user_shell");
+        exec("user_shell\0", &[]);
     } else {
         loop {
             let mut exit_code: i32 = 0;

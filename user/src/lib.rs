@@ -63,8 +63,8 @@ pub fn getpid() -> isize {
 pub fn fork() -> isize {
     sys_fork()
 }
-pub fn exec(path: &str) -> isize {
-    sys_exec(path)
+pub fn exec(path: &str, args: &[*const u8]) -> isize {
+    sys_exec(path, args)
 }
 
 pub fn read(fd: usize, buf: &mut [u8]) -> isize {
@@ -93,6 +93,23 @@ pub fn waitpid(pid: usize, exit_code: &mut i32) -> isize {
             }
             // -1 or a real pid
             exit_pid => return exit_pid,
+        }
+    }
+}
+
+pub fn thread_create(entry: usize, arg: usize) -> isize {
+    sys_thread_create(entry, arg)
+}
+pub fn gettid() -> isize {
+    sys_gettid()
+}
+pub fn waittid(tid: usize) -> isize {
+    loop {
+        match sys_waittid(tid) {
+            -2 => {
+                yield_();
+            }
+            exit_code => return exit_code,
         }
     }
 }

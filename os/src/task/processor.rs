@@ -1,9 +1,10 @@
 use crate::{println, sbi::shutdown, sync::UPSafeCell, trap::TrapContext};
-use alloc::sync::Arc;
+use alloc::{sync::Arc, vec::Vec};
 use lazy_static::lazy_static;
 
 use super::{
-    manager::{add_task, fetch_task},
+    id::TaskUserRes,
+    manager::{add_task, fetch_task, remove_from_pid2process, remove_task},
     process::ProcessControlBlock,
     switch::__switch,
     task::{TaskControlBlock, TaskStatus},
@@ -137,41 +138,81 @@ pub const IDLE_PID: usize = 0;
 pub fn exit_current_and_run_next(exit_code: i32) {
     // 注意这里是take
     let task = take_current_task().unwrap();
-    let pid = task.getpid();
-    if pid == IDLE_PID {
-        println!(
-            "[kernel] Idle process exit with exit_code {} ...",
-            exit_code
-        );
-        if exit_code != 0 {
-            //crate::sbi::shutdown(255); //255 == -1 for err hint
-            shutdown(true)
-        } else {
-            //crate::sbi::shutdown(0); //0 for success hint
-            shutdown(false)
-        }
-    }
+    let process = task.process.upgrade().unwrap();
+    let tid = task.gettid();
 
-    let mut inner = task.inner_exclusive_access();
-    inner.task_status = TaskStatus::Zombie;
-    inner.exit_code = Some(exit_code);
-
-    // 把当前进程的子进程都设置为initproc的子进程
-    {
-        let mut initproc_inner = INITPROC.inner_exclusive_access();
-        for child in inner.children.iter() {
-            child.inner_exclusive_access().parent = Some(Arc::downgrade(&INITPROC));
-            initproc_inner.children.push(child.clone());
-        }
-    }
-
-    // 释放资源
-    inner.children.clear();
-    inner.memory_set.recycle_data_pages();
-
-    // 要调用schedule了，所以要手动drop这些智能指针
-    drop(inner);
+    let mut task_inner = task.inner_exclusive_access();
+    task_inner.exit_code = Some(exit_code);
+    task_inner.res = None;
+    drop(task_inner);
     drop(task);
+
+    if tid == 0 {
+        // main thread
+        let pid = process.getpid();
+        if pid == IDLE_PID {
+            println!(
+                "[kernel] Idle process exit with exit_code {} ...",
+                exit_code
+            );
+            if exit_code != 0 {
+                //crate::sbi::shutdown(255); //255 == -1 for err hint
+                shutdown(true)
+            } else {
+                //crate::sbi::shutdown(0); //0 for success hint
+                shutdown(false)
+            }
+        }
+        remove_from_pid2process(pid);
+        let mut process_inner = process.inner_exclusive_access();
+        process_inner.is_zombie = true;
+        process_inner.exit_code = exit_code;
+        // 把当前进程的子进程都设置为initproc的子进程
+        {
+            let mut initproc_inner = INITPROC.inner_exclusive_access();
+            for child in process_inner.children.iter() {
+                child.inner_exclusive_access().parent = Some(Arc::downgrade(&INITPROC));
+                initproc_inner.children.push(child.clone());
+            }
+        }
+
+        // 主线程退出，其他线程也要退出
+        let mut user_res: Vec<TaskUserRes> = Vec::new();
+        for task in process_inner.tasks.iter().filter(|t| t.is_some()) {
+            let task = task.as_ref().unwrap();
+
+            remove_task(Arc::clone(&task));
+            let mut task_inner = task.inner_exclusive_access();
+
+            // TaskUserRes的Drop trait需要访问process inner
+            // 所以必须要在process被drop前drop掉TaskUserRes
+            // 方法就是获得他们的所有权然后清掉
+            if let Some(res) = task_inner.res.take() {
+                user_res.push(res);
+            }
+        }
+        // TaskUserRes的Drop trait 需要访问process inner
+        // proecess inner在上面被我们借用了，因此要暂时释放掉，待会再重新借用
+        // 不然TaskUserRes就不能正常drop了
+        drop(process_inner);
+        user_res.clear();
+
+        let mut process_inner = process.inner_exclusive_access();
+        process_inner.children.clear();
+        process_inner.memory_set.recycle_data_pages();
+
+        // 我们还要用主线程的内核栈，所以不能释放tasks[0]
+        while process_inner.tasks.len() > 1 {
+            process_inner.tasks.pop();
+        }
+    }
+    // 这个方法的caller task的资源不会被释放
+    // 需要主动的sys_waittid/sys_waitpid来释放
+    
+    // 值得一提的是，因为INITPROC进程一直在循环调用sys_waitpid，
+    // 所有INITPROC的子进程在退出后都会被释放，不会成为僵尸
+
+    drop(process);
 
     let mut _unused = TaskContext::new_empty();
     schedule(&mut _unused as *mut _);

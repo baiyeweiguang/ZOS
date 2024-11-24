@@ -29,7 +29,7 @@ pub fn main() -> i32 {
                     let pid = fork();
                     if pid == 0 {
                         // 子进程
-                        if exec(line.as_str()) == -1 {
+                        if exec(line.as_str(), &[]) == -1 {
                             println!("Error when executing! command = {}", line);
                             return -4;
                         }
