@@ -237,6 +237,12 @@ pub fn translate_ref_mut<T>(token: usize, ptr: *mut T) -> &'static mut T {
         .get_mut()
 }
 
+pub fn translate_ref<T>(token: usize, ptr: *const T) -> &'static T {
+    let page_table = PageTable::from_token(token);
+    let pa = page_table.translate_va((ptr as usize).into()).unwrap();
+    unsafe { (pa.0 as *mut T).as_ref() }.unwrap()
+}
+
 #[allow(unused)]
 pub fn find_pte_test() {
     let mut page_table = PageTable::new();

@@ -42,7 +42,7 @@ pub fn sys_thread_create(entry: usize, arg: usize) -> isize {
         entry,
         new_task_res.ustack_top(),
         kernel_token(),
-        new_task.kernel_stack.get_top(),
+        new_task.kstack.get_top(),
         trap_handler as usize,
     );
     (*new_task_trap_cx).x[10] = arg;

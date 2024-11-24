@@ -1,10 +1,12 @@
+use alloc::string::String;
 use alloc::sync::Arc;
+use alloc::vec::Vec;
 
 use crate::loader::get_app_data_by_name;
-use crate::mm::{translate_ref_mut, translate_str};
+use crate::mm::{translate_ref, translate_ref_mut, translate_str};
 use crate::println;
 use crate::task::{
-    add_task, current_task, current_user_token, exit_current_and_run_next,
+    add_task, current_process, current_task, current_user_token, exit_current_and_run_next,
     suspend_current_and_run_next,
 };
 use crate::timer::get_time;
@@ -25,38 +27,54 @@ pub fn sys_get_time() -> isize {
     get_time() as isize
 }
 
+// !
 pub fn sys_fork() -> isize {
-    let current_task = current_task().unwrap();
-    let new_task = current_task.fork();
-    let new_trap_cx = new_task.inner_exclusive_access().get_trap_cx();
+    // 创建新进程
+    let process = current_process();
+    let new_process = process.fork();
+    let new_pid = new_process.getpid();
+    // 修改trap context
+    let new_trap_cx = new_process
+        .inner_exclusive_access()
+        .get_task(0)
+        .inner_exclusive_access()
+        .get_trap_cx();
 
     // 子进程的返回值为0
     new_trap_cx.x[10] = 0;
-
-    let new_pid = new_task.pid.0;
-
-    add_task(new_task);
 
     // 父进程的返回值为子进程的pid
     new_pid as isize
 }
 
-pub fn sys_exec(path: *const u8) -> isize {
+pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
     let token = current_user_token();
     let path = translate_str(token, path);
+    let mut args_vec: Vec<String> = Vec::new();
+    loop {
+        let arg_str_ptr = *translate_ref(token, args);
+        if arg_str_ptr == 0 {
+            break;
+        }
+        args_vec.push(translate_str(token, arg_str_ptr as *const u8));
+        unsafe {
+            args = args.add(1);
+        }
+    }
 
     if let Some(data) = get_app_data_by_name(path.as_str()) {
         // println!("try to exec {:?}", path);
-        let task = current_task().unwrap();
-        task.exec(data);
-        0
+        let process = current_process();
+        let argc = args_vec.len();
+        process.exec(data, args_vec);
+        argc as isize
     } else {
         -1
     }
 }
 
 pub fn sys_getpid() -> isize {
-    current_task().unwrap().pid.0 as isize
+    current_process().getpid() as isize
 }
 
 /// 获取pid为ipid的僵尸子进程的退出码

@@ -81,6 +81,10 @@ impl TaskUserRes {
         ppn
     }
 
+    pub fn trap_cx_user_va(&self) -> usize {
+        trap_cx_bottom_from_tid(self.tid)
+    }
+
     pub fn ustack_top(&self) -> usize {
         ustack_bottom_from_tid(self.ustack_base, self.tid) + USER_STACK_SIZE
     }
@@ -90,7 +94,7 @@ impl TaskUserRes {
     }
 
     /// 在进程地址空间中映射线程的用户栈和 Trap 上下文。
-    fn alloc_user_res(&self) {
+    pub fn alloc_user_res(&self) {
         let process = self.process.upgrade().unwrap();
 
         let user_stack_bottom = ustack_bottom_from_tid(self.ustack_base, self.tid);

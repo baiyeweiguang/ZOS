@@ -36,7 +36,7 @@ pub enum TaskStatus {
 pub struct TaskControlBlock {
     // immutable
     pub process: Weak<ProcessControlBlock>,
-    pub kernel_stack: KernelStack,
+    pub kstack: KernelStack,
     // mutable
     inner: UPSafeCell<TaskControlBlockInner>,
 }
@@ -67,7 +67,7 @@ impl TaskControlBlock {
         let kernel_stack_top = kernel_stack.get_top();
         Self {
             process: Arc::downgrade(&parent),
-            kernel_stack,
+            kstack: kernel_stack,
             inner: UPSafeCell::new(TaskControlBlockInner {
                 res: Some(res),
                 trap_cx_ppn,
@@ -80,6 +80,17 @@ impl TaskControlBlock {
 
     pub fn inner_exclusive_access(&self) -> RefMut<'_, TaskControlBlockInner> {
         self.inner.exclusive_access()
+    }
+
+    pub fn get_user_token(&self) -> usize {
+        let process = self.process.upgrade().unwrap();
+        let inner = process.inner_exclusive_access();
+        inner.memory_set.token()
+    }
+
+    pub fn getpid(&self) -> usize {
+        let process = self.process.upgrade().unwrap();
+        process.pid.0
     }
 }
 
@@ -111,9 +122,6 @@ impl TaskControlBlock {
 // }
 
 // impl TaskControlBlock {
-    
-
-
 
 //     /// 加载elf文件，替换掉当前进程的代码和数据，并开始执行
 //     pub fn exec(&self, elf_data: &[u8]) {

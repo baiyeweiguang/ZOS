@@ -53,15 +53,13 @@ pub fn current_task() -> Option<Arc<TaskControlBlock>> {
     PROCESSOR.exclusive_access().current()
 }
 
-// TODO
-pub fn current_process() -> Option<Arc<ProcessControlBlock>> {
-    None
+pub fn current_process() -> Arc<ProcessControlBlock> {
+    current_task().unwrap().process.upgrade().unwrap()
 }
 
 pub fn current_user_token() -> usize {
     let task = current_task().expect("no current task");
-    let token = task.inner_exclusive_access().get_user_token();
-    token
+    task.get_user_token()
 }
 
 pub fn current_trap_cx() -> &'static mut TrapContext {
@@ -71,14 +69,18 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
         .get_trap_cx()
 }
 
-// TODO
 pub fn current_trap_cx_user_va() -> usize {
-    0
+    current_task()
+        .unwrap()
+        .inner_exclusive_access()
+        .res
+        .as_ref()
+        .unwrap()
+        .trap_cx_user_va()
 }
 
-// TODO
 pub fn current_kernel_stack_top() -> usize {
-    0
+    current_task().unwrap().kstack.get_top()
 }
 
 // 当一个进程耗尽了时间片后，内核会调用这个函数将当前处理器切换到idle进程上
@@ -152,7 +154,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
 
     let mut inner = task.inner_exclusive_access();
     inner.task_status = TaskStatus::Zombie;
-    inner.exit_code = exit_code;
+    inner.exit_code = Some(exit_code);
 
     // 把当前进程的子进程都设置为initproc的子进程
     {

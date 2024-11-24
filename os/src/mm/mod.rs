@@ -10,7 +10,7 @@ pub use memory_set::MemorySet;
 pub use memory_set::KERNEL_SPACE;
 
 pub use memory_set::kernel_token;
-pub use page_table::{translate_buffer, translate_ref_mut, translate_str};
+pub use page_table::{translate_buffer, translate_ref, translate_ref_mut, translate_str};
 
 pub fn init() {
     heap_allocator::init_heap();

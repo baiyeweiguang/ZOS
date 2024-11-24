@@ -1,13 +1,14 @@
 use core::cell::RefMut;
 
 use alloc::{
+    string::String,
     sync::{Arc, Weak},
     vec::Vec,
 };
 
 use crate::{
     config::TRAP_CONTEXT_ADDRESS,
-    mm::{MemorySet, VirtAddr, KERNEL_SPACE},
+    mm::{translate_ref_mut, MemorySet, VirtAddr, KERNEL_SPACE},
     sync::UPSafeCell,
     task::add_task,
     trap::{trap_handler, TrapContext},
@@ -90,7 +91,7 @@ impl ProcessControlBlock {
         let task_inner = main_task.inner_exclusive_access();
         let trap_cx = task_inner.get_trap_cx();
         let ustack_top = task_inner.res.as_ref().unwrap().ustack_top();
-        let kstack_top = main_task.kernel_stack.get_top();
+        let kstack_top = main_task.kstack.get_top();
         drop(task_inner);
         *trap_cx = TrapContext::app_init_context(
             entry_point,
@@ -112,6 +113,7 @@ impl ProcessControlBlock {
     pub fn fork(self: &Arc<Self>) -> Arc<Self> {
         let mut parent_inner = self.inner_exclusive_access();
 
+        // 只支持单线程
         assert_eq!(parent_inner.thread_count(), 1);
 
         // 创建新进程
@@ -159,7 +161,7 @@ impl ProcessControlBlock {
             // 在MemorySet::from_existed_user()中已经将父进程的数据复制了一份，
             // 所以这里的new_trap_cx_ppn是已经复制了父进程的了，跟new()中的空数据不一样
             let trap_cx = inner.get_trap_cx();
-            trap_cx.kernel_sp = child_main_task.kernel_stack.get_top();
+            trap_cx.kernel_sp = child_main_task.kstack.get_top();
         }
 
         insert_into_pid2process(child.getpid(), Arc::clone(&child));
@@ -167,6 +169,67 @@ impl ProcessControlBlock {
         // add this thread to scheduler
         add_task(child_main_task);
         child
+    }
+
+    pub fn exec(self: &Arc<Self>, elf_data: &[u8], args: Vec<String>) {
+        assert_eq!(self.inner_exclusive_access().thread_count(), 1);
+
+        let (memory_set, ustack_base, entry_point) = MemorySet::from_elf(elf_data);
+        let new_token = memory_set.token();
+
+        // 更换地址空间
+        self.inner_exclusive_access().memory_set = memory_set;
+
+        // 因为地址空间变化，需要重新为主线程分配资源
+        let task = self.inner_exclusive_access().get_task(0);
+        let mut task_inner = task.inner_exclusive_access();
+        task_inner.res.as_mut().unwrap().ustack_base = ustack_base;
+        task_inner.res.as_mut().unwrap().alloc_user_res();
+
+        // 将参数压入栈中
+        // 假如有2个参数
+        // 用户栈的布局如下
+        // | argc | &argv[0] | &argv[1] | argv[0] | argv[1] |
+        let mut user_sp = task_inner.res.as_ref().unwrap().ustack_top();
+
+        // 为argc和argv分配空间
+        user_sp -= (args.len() + 1) * core::mem::size_of::<usize>();
+        let argv_base = user_sp;
+        let mut argv: Vec<_> = (0..=args.len())
+            .map(|i| {
+                translate_ref_mut(
+                    new_token,
+                    (argv_base + i * core::mem::size_of::<usize>()) as *mut usize,
+                )
+            })
+            .collect();
+
+        for i in 0..args.len() {
+            user_sp -= args[i].len() + 1;
+            *argv[i] = user_sp;
+            // argv后面的才是数据
+            let mut p = user_sp;
+            for c in args[i].as_bytes() {
+                *translate_ref_mut(new_token, p as *mut u8) = *c;
+                p += 1;
+            }
+            *translate_ref_mut(new_token, p as *mut u8) = 0;
+        }
+
+        // 保证user_sp按8B对齐(K210规定)
+        user_sp -= user_sp % core::mem::size_of::<usize>();
+
+        // 修改TrapContext
+        let mut trap_cx = TrapContext::app_init_context(
+            entry_point,
+            user_sp,
+            KERNEL_SPACE.exclusive_access().token(),
+            task.kstack.get_top(),
+            trap_handler as usize,
+        );
+        trap_cx.x[10] = args.len(); // argc
+        trap_cx.x[11] = argv_base; // argv
+        *task_inner.get_trap_cx() = trap_cx;
     }
 
     pub fn getpid(&self) -> usize {

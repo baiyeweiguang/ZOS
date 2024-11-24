@@ -28,5 +28,5 @@ pub fn add_initproc() {
 
 pub use processor::{
     current_task, current_trap_cx, current_user_token, exit_current_and_run_next, run_tasks,
-    suspend_current_and_run_next,
+    suspend_current_and_run_next, current_process,
 };
