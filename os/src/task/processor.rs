@@ -1,4 +1,4 @@
-use crate::{println, sbi::shutdown, sync::UPSafeCell, trap::TrapContext};
+use crate::{mm::VirtAddr, println, sbi::shutdown, sync::UPSafeCell, trap::TrapContext};
 use alloc::{sync::Arc, vec::Vec};
 use lazy_static::lazy_static;
 
@@ -59,7 +59,7 @@ pub fn current_process() -> Arc<ProcessControlBlock> {
 }
 
 pub fn current_user_token() -> usize {
-    let task = current_task().expect("no current task");
+    let task = current_task().unwrap();
     task.get_user_token()
 }
 
@@ -80,7 +80,7 @@ pub fn current_trap_cx_user_va() -> usize {
         .trap_cx_user_va()
 }
 
-pub fn current_kernel_stack_top() -> usize {
+pub fn current_kstack_top() -> usize {
     current_task().unwrap().kstack.get_top()
 }
 
@@ -113,22 +113,32 @@ pub fn run_tasks() {
 
             drop(processor);
             unsafe { __switch(idle_task_cx_ptr, next_task_cx_ptr) };
+        } else {
+            println!("no tasks available in run_tasks");
         }
     }
 }
 
+pub fn block_current_and_run_next() {
+    let task = take_current_task().unwrap();
+    let mut task_inner = task.inner_exclusive_access();
+    let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
+    task_inner.task_status = TaskStatus::Blocked;
+    drop(task_inner);
+    schedule(task_cx_ptr);
+}
+
 pub fn suspend_current_and_run_next() {
-    let current_task = current_task().expect("no current task");
+    let current_task = take_current_task().unwrap();
 
     let mut current_task_inner = current_task.inner_exclusive_access();
-    current_task_inner.task_status = TaskStatus::Ready;
-
     let current_task_cx_ptr = &mut current_task_inner.task_cx as *mut TaskContext;
 
+    current_task_inner.task_status = TaskStatus::Ready;
     // 因为schedule会调用__switch，所以这里必须手动释放资源
     drop(current_task_inner);
 
-    add_task(current_task.clone());
+    add_task(current_task);
     schedule(current_task_cx_ptr);
 }
 
@@ -208,7 +218,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     }
     // 这个方法的caller task的资源不会被释放
     // 需要主动的sys_waittid/sys_waitpid来释放
-    
+
     // 值得一提的是，因为INITPROC进程一直在循环调用sys_waitpid，
     // 所有INITPROC的子进程在退出后都会被释放，不会成为僵尸
 

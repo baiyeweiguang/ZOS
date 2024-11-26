@@ -1,5 +1,6 @@
 use core::cell::RefMut;
 
+use crate::sync::{Condvar, Mutex, Semaphore};
 use alloc::{
     string::String,
     sync::{Arc, Weak},
@@ -34,6 +35,9 @@ pub struct ProcessControlBlockInner {
     pub exit_code: i32,
     pub tasks: Vec<Option<Arc<TaskControlBlock>>>,
     pub task_res_allocator: RecycleAllocator,
+    pub mutex_list: Vec<Option<Arc<dyn Mutex>>>,
+    pub semaphore_list: Vec<Option<Arc<Semaphore>>>,
+    pub condvar_list: Vec<Option<Arc<Condvar>>>,
 }
 
 impl ProcessControlBlockInner {
@@ -78,6 +82,9 @@ impl ProcessControlBlock {
                 exit_code: 0,
                 tasks: Vec::new(),
                 task_res_allocator: RecycleAllocator::new(),
+                mutex_list: Vec::new(),
+                semaphore_list: Vec::new(),
+                condvar_list: Vec::new(),
             }),
         });
 
@@ -133,6 +140,9 @@ impl ProcessControlBlock {
                     exit_code: 0,
                     tasks: Vec::new(),
                     task_res_allocator: RecycleAllocator::new(),
+                    mutex_list: Vec::new(),
+                    semaphore_list: Vec::new(),
+                    condvar_list: Vec::new(),
                 })
             },
         });

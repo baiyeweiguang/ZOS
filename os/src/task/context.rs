@@ -23,7 +23,7 @@ impl TaskContext {
 
     // 在初始化TASK_MANAGER时被调用
     // 传入这个task对应的内核栈指针
-    pub fn goto_trap_ret(kstack_ptr: usize) -> Self {
+    pub fn goto_trap_return(kstack_ptr: usize) -> Self {
         // 在__switch函数（先保存完TaskContext的各种寄存器后）的最后一行，会调用汇编指令ret
         // 然后CPU会跳转到ra寄存器中的地址，也就是trap_return函数
         // trap_return函数会调用trap.S的__restore函数

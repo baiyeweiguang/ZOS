@@ -8,7 +8,7 @@ mod task;
 
 use alloc::sync::Arc;
 pub use context::TaskContext;
-pub use manager::add_task;
+pub use manager::{add_task, wakeup_task};
 use process::ProcessControlBlock;
 // pub use task::TaskStatus;
 
@@ -27,6 +27,6 @@ pub fn add_initproc() {
 }
 
 pub use processor::{
-    current_task, current_trap_cx, current_user_token, exit_current_and_run_next, run_tasks,
-    suspend_current_and_run_next, current_process,
+    block_current_and_run_next, current_process, current_task, current_trap_cx, current_user_token,
+    exit_current_and_run_next, run_tasks, suspend_current_and_run_next,
 };

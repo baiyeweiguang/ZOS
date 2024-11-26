@@ -59,17 +59,17 @@ impl TaskControlBlockInner {
 
 impl TaskControlBlock {
     pub fn new(parent: Arc<ProcessControlBlock>, ustack_base: usize, alloc_user_res: bool) -> Self {
-        let res = TaskUserRes::new(parent.clone(), ustack_base, alloc_user_res);
+        let res = TaskUserRes::new(Arc::clone(&parent), ustack_base, alloc_user_res);
         let trap_cx_ppn = res.trap_cx_ppn();
-        let kernel_stack = alloc_kernel_stack();
-        let kernel_stack_top = kernel_stack.get_top();
+        let kstack = alloc_kernel_stack();
+        let kstack_top = kstack.get_top();
         Self {
             process: Arc::downgrade(&parent),
-            kstack: kernel_stack,
+            kstack,
             inner: UPSafeCell::new(TaskControlBlockInner {
                 res: Some(res),
                 trap_cx_ppn,
-                task_cx: TaskContext::goto_trap_ret(kernel_stack_top),
+                task_cx: TaskContext::goto_trap_return(kstack_top),
                 task_status: TaskStatus::Ready,
                 exit_code: None,
             }),
@@ -95,70 +95,3 @@ impl TaskControlBlock {
         self.inner_exclusive_access().res.as_ref().unwrap().tid
     }
 }
-
-// pub struct TaskControlBlockInner {
-//     pub trap_cx_ppn: PhysPageNum,
-//     #[allow(unused)]
-//     pub base_size: usize,
-//     pub task_cx: TaskContext,
-//     pub task_status: TaskStatus,
-//     pub memory_set: MemorySet,
-//     pub parent: Option<Weak<TaskControlBlock>>,
-//     pub children: Vec<Arc<TaskControlBlock>>,
-//     pub exit_code: i32,
-// }
-
-// impl TaskControlBlockInner {
-//     pub fn get_trap_cx(&self) -> &'static mut TrapContext {
-//         self.trap_cx_ppn.get_mut()
-//     }
-//     pub fn get_user_token(&self) -> usize {
-//         self.memory_set.token()
-//     }
-//     fn get_status(&self) -> TaskStatus {
-//         self.task_status
-//     }
-//     pub fn is_zombie(&self) -> bool {
-//         self.get_status() == TaskStatus::Zombie
-//     }
-// }
-
-// pub fn change_program_brk(&mut self, size: i32) -> Option<usize> {
-//     let old_brk = self.program_brk;
-//     // size可能为负数
-//     let new_brk: isize = self.program_brk as isize + size as isize;
-
-//     // 小于heap_bottom的话，新的brk会侵犯到stack甚至其他地方的空间，不合法
-//     if new_brk < self.heap_bottom as isize {
-//         return None;
-//     }
-
-//     let result = if size < 0 {
-//         self.memory_set.shrink_to(
-//             VirtAddr::from(self.heap_bottom),
-//             VirtAddr::from(new_brk as usize),
-//         )
-//     } else {
-//         // 源码里是from(self.heep_bottom)，有待商榷
-//         self.memory_set.append_to(
-//             VirtAddr::from(self.program_brk),
-//             VirtAddr::from(new_brk as usize),
-//         )
-//     };
-
-//     if result {
-//         self.program_brk = new_brk as usize;
-//         Some(old_brk)
-//     } else {
-//         None
-//     }
-// }
-
-//     pub fn inner_exclusive_access(&self) -> RefMut<'_, TaskControlBlockInner> {
-//         self.inner.exclusive_access()
-//     }
-
-//     pub fn getpid(&self) -> usize {
-//         self.pid.0
-//     }
-// }

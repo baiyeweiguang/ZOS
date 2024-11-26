@@ -3,7 +3,10 @@ pub use context::TrapContext;
 use riscv::register::sie;
 
 use crate::config::{TRAMPOLINE_ADDRESS, TRAP_CONTEXT_ADDRESS};
-use crate::task::{current_trap_cx, current_user_token, suspend_current_and_run_next};
+use crate::task::{
+    current_task, current_trap_cx, current_user_token, suspend_current_and_run_next,
+};
+use crate::timer::check_timer;
 use crate::{task::exit_current_and_run_next, timer::set_next_trigger};
 // use crate::batch::run_next_app;
 use crate::println;
@@ -66,7 +69,9 @@ pub fn trap_handler() -> ! {
             exit_current_and_run_next(-3);
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
+            // 定时器中断
             set_next_trigger();
+            check_timer();
             suspend_current_and_run_next();
         }
         _ => {

@@ -96,44 +96,40 @@ impl TaskUserRes {
     /// 在进程地址空间中映射线程的用户栈和 Trap 上下文。
     pub fn alloc_user_res(&self) {
         let process = self.process.upgrade().unwrap();
+        let mut process_inner = process.inner_exclusive_access();
 
-        let user_stack_bottom = ustack_bottom_from_tid(self.ustack_base, self.tid);
-        let user_stack_top = user_stack_bottom + USER_STACK_SIZE;
-        process
-            .inner_exclusive_access()
-            .memory_set
-            .insert_framed_area(
-                user_stack_bottom.into(),
-                user_stack_top.into(),
-                MapPermission::R | MapPermission::W | MapPermission::U,
-            );
+        // alloc ustack
+        let ustack_bottom = ustack_bottom_from_tid(self.ustack_base, self.tid);
+        let ustack_top = ustack_bottom + USER_STACK_SIZE;
+        process_inner.memory_set.insert_framed_area(
+            ustack_bottom.into(),
+            ustack_top.into(),
+            MapPermission::R | MapPermission::W | MapPermission::U,
+        );
 
+        // alloc trap_cx
         let trap_cx_bottom = trap_cx_bottom_from_tid(self.tid);
         let trap_cx_top = trap_cx_bottom + PAGE_SIZE;
-        process
-            .inner_exclusive_access()
-            .memory_set
-            .insert_framed_area(
-                trap_cx_bottom.into(),
-                trap_cx_top.into(),
-                MapPermission::R | MapPermission::W,
-            );
+        process_inner.memory_set.insert_framed_area(
+            trap_cx_bottom.into(),
+            trap_cx_top.into(),
+            MapPermission::R | MapPermission::W,
+        );
     }
 
     fn dealloc_user_res(&self) {
         let process = self.process.upgrade().unwrap();
+        let mut process_inner = process.inner_exclusive_access();
 
-        let user_stack_bottom = ustack_bottom_from_tid(self.ustack_base, self.tid);
-        let user_stack_bottom_va: VirtAddr = user_stack_bottom.into();
-        process
-            .inner_exclusive_access()
+        // dealloc ustack
+        let ustack_bottom_va: VirtAddr = ustack_bottom_from_tid(self.ustack_base, self.tid).into();
+        process_inner
             .memory_set
-            .remove_area_with_start_vpn(user_stack_bottom_va.into());
+            .remove_area_with_start_vpn(ustack_bottom_va.into());
 
-        let trap_cx_bottom = trap_cx_bottom_from_tid(self.tid);
-        let trap_cx_bottom_va: VirtAddr = trap_cx_bottom.into();
-        process
-            .inner_exclusive_access()
+        // dealloc trap_cx
+        let trap_cx_bottom_va: VirtAddr = trap_cx_bottom_from_tid(self.tid).into();
+        process_inner
             .memory_set
             .remove_area_with_start_vpn(trap_cx_bottom_va.into());
     }
